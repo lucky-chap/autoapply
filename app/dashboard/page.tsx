@@ -6,11 +6,13 @@ import {
   FileText,
   ShieldCheck,
   Plus,
-  Search,
-  Mail,
-  Clock,
   ArrowUpRight,
+  Settings2,
 } from "lucide-react"
+import {
+  RecentApplications,
+  CheckInboxButton,
+} from "@/components/DashboardClient"
 
 export default async function DashboardPage() {
   const session = await auth0.getSession()
@@ -19,30 +21,6 @@ export default async function DashboardPage() {
   }
 
   const user = session.user
-
-  const stats = [
-    {
-      label: "Total Applications",
-      value: "0",
-      icon: Mail,
-      color: "text-blue-600",
-      bg: "bg-blue-50",
-    },
-    {
-      label: "Active Responses",
-      value: "0",
-      icon: ArrowUpRight,
-      color: "text-green-600",
-      bg: "bg-green-50",
-    },
-    {
-      label: "Pending MFA",
-      value: "0",
-      icon: Clock,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
-    },
-  ]
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -63,28 +41,6 @@ export default async function DashboardPage() {
           <Plus className="h-5 w-5" />
           New Application
         </Link>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="mb-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
-          >
-            <div className="flex items-center gap-4">
-              <div className={`${stat.bg} ${stat.color} rounded-xl p-3`}>
-                <stat.icon className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">
-                  {stat.label}
-                </p>
-                <p className="text-2xl font-bold text-primary">{stat.value}</p>
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Main Content Areas */}
@@ -130,11 +86,7 @@ export default async function DashboardPage() {
                 Recent Applications
               </h2>
             </div>
-            <div className="p-12 text-center">
-              <p className="text-gray-400 italic">
-                No applications sent yet. Start by finding a job listing!
-              </p>
-            </div>
+            <RecentApplications userId={user.sub} />
           </section>
         </div>
 
@@ -148,6 +100,8 @@ export default async function DashboardPage() {
             </p>
             <div className="h-1 w-12 rounded-full bg-secondary"></div>
           </div>
+
+          <CheckInboxButton />
 
           <nav className="space-y-1 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
             <Link
@@ -163,6 +117,13 @@ export default async function DashboardPage() {
             >
               <FileText className="h-5 w-5" />
               Resume Profile
+            </Link>
+            <Link
+              href="/dashboard/preferences"
+              className="flex items-center gap-3 rounded-xl p-3 text-gray-600 transition-all hover:bg-gray-50 hover:text-primary"
+            >
+              <Settings2 className="h-5 w-5" />
+              Job Preferences
             </Link>
             <Link
               href="/permissions"

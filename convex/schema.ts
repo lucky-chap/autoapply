@@ -34,4 +34,12 @@ export default defineSchema({
     fileId: v.optional(v.id("_storage")),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  preferences: defineTable({
+    userId: v.string(),
+    targetRoles: v.array(v.string()),
+    targetLocations: v.array(v.string()),
+    minSalary: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 })

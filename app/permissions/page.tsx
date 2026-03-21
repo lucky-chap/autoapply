@@ -4,9 +4,9 @@ import {
   Shield,
   CheckCircle2,
   AlertCircle,
-  Trash2,
   ExternalLink,
   PlusCircle,
+  Unplug,
 } from "lucide-react"
 
 // These are the scopes we want to verify are present
@@ -97,9 +97,10 @@ export default async function PermissionsPage() {
                   Connect Google
                 </a>
               ) : (
-                <span className="text-xs font-bold tracking-wider text-gray-400 uppercase">
-                  Active Connection
-                </span>
+                <button className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-500 transition-colors hover:bg-red-50">
+                  <Unplug className="h-3.5 w-3.5" />
+                  Disconnect Google
+                </button>
               )}
             </div>
           </div>
@@ -137,14 +138,6 @@ export default async function PermissionsPage() {
                     ></span>
                     {item.status}
                   </span>
-                  {item.isGranted && (
-                    <button
-                      title="Revoke (Manual)"
-                      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-danger/5 hover:text-danger"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
               </div>
             ))}

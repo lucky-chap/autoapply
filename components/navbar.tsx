@@ -25,6 +25,12 @@ export async function Navbar() {
                 Dashboard
               </Link>
               <Link
+                href="/dashboard/new"
+                className="text-sm font-medium text-text transition-colors hover:text-primary"
+              >
+                New Application
+              </Link>
+              <Link
                 href="/permissions"
                 className="text-sm font-medium text-text transition-colors hover:text-primary"
               >

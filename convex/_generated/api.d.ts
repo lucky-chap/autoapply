@@ -9,6 +9,7 @@
  */
 
 import type * as applications from "../applications.js";
+import type * as preferences from "../preferences.js";
 import type * as resumeProfiles from "../resumeProfiles.js";
 
 import type {
@@ -19,6 +20,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   applications: typeof applications;
+  preferences: typeof preferences;
   resumeProfiles: typeof resumeProfiles;
 }>;
 

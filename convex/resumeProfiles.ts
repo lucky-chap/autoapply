@@ -41,7 +41,15 @@ export const upsert = mutation({
 })
 
 export const generateUploadUrl = mutation({
+  args: {},
   handler: async (ctx) => {
     return await ctx.storage.generateUploadUrl()
+  },
+})
+
+export const getFileUrl = query({
+  args: { fileId: v.id("_storage") },
+  handler: async (ctx, { fileId }) => {
+    return await ctx.storage.getUrl(fileId)
   },
 })
