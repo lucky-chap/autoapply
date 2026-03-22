@@ -35,9 +35,16 @@ export async function POST(req: Request) {
       connection: "google-oauth2",
     }) as { token: string }
     accessToken = tokenResponse.token
-  } catch {
+  } catch (err) {
+    const message = String(err)
+    if (message.includes("expired") || message.includes("invalid_grant")) {
+      return NextResponse.json(
+        { error: "Gmail token expired. Please reconnect Google in Permissions." },
+        { status: 401 }
+      )
+    }
     return NextResponse.json(
-      { error: "Gmail not connected." },
+      { error: "Gmail not connected. Please connect Google in Permissions." },
       { status: 400 }
     )
   }
@@ -55,18 +62,41 @@ export async function POST(req: Request) {
   let updatedCount = 0
 
   for (const app of appliedApps) {
-    // Search Gmail for replies from this company
-    const query = `from:${app.recipientEmail} newer_than:7d`
-    const listResult = await listGmailMessages(accessToken, query, 3)
+    let replyMessage = null
 
-    if (!listResult.messages || listResult.messages.length === 0) continue
+    if (app.gmailThreadId) {
+      // Preferred: check the specific Gmail thread for replies from the recipient
+      const threadRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${app.gmailThreadId}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      if (threadRes.ok) {
+        const thread = await threadRes.json()
+        // Find messages in the thread from the recipient (not from the user)
+        const replies = (thread.messages || []).filter(
+          (msg: { payload?: { headers?: { name: string; value: string }[] } }) => {
+            const fromHeader = msg.payload?.headers?.find(
+              (h: { name: string }) => h.name.toLowerCase() === "from"
+            )
+            return fromHeader && fromHeader.value.includes(app.recipientEmail)
+          }
+        )
+        if (replies.length > 0) {
+          replyMessage = replies[replies.length - 1]
+        }
+      }
+    } else {
+      // Fallback for older applications without threadId
+      const query = `from:${app.recipientEmail} newer_than:7d`
+      const listResult = await listGmailMessages(accessToken, query, 3)
+      if (listResult.messages && listResult.messages.length > 0) {
+        replyMessage = await getGmailMessage(accessToken, listResult.messages[0].id)
+      }
+    }
 
-    // Get the most recent message
-    const message = await getGmailMessage(
-      accessToken,
-      listResult.messages[0].id
-    )
-    const bodyText = extractBody(message.payload)
+    if (!replyMessage) continue
+
+    const bodyText = extractBody(replyMessage.payload)
 
     if (!bodyText) continue
 

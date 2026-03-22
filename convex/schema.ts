@@ -15,9 +15,17 @@ export default defineSchema({
     ),
     coverLetter: v.string(),
     recipientEmail: v.string(),
+    gmailThreadId: v.optional(v.string()),
     emailSentAt: v.optional(v.number()),
+    openCount: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  emailOpens: defineTable({
+    applicationId: v.id("applications"),
+    openedAt: v.number(),
+    userAgent: v.optional(v.string()),
+  }).index("by_applicationId", ["applicationId"]),
 
   resumeProfiles: defineTable({
     userId: v.string(),

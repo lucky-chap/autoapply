@@ -6,8 +6,8 @@ export async function Navbar() {
   const user = session?.user
 
   return (
-    <nav className="sticky top-0 z-50 border-b bg-surface">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
+    <nav className="sticky top-0 z-50 border-b border-gray-100 bg-surface">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="font-display text-xl font-bold tracking-tight text-primary"
@@ -15,30 +15,30 @@ export async function Navbar() {
           AutoApply
         </Link>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 sm:gap-6">
           {user ? (
             <>
               <Link
                 href="/dashboard"
-                className="text-sm font-medium text-text transition-colors hover:text-primary"
+                className="hidden text-sm font-medium text-text transition-colors hover:text-primary sm:block"
               >
                 Dashboard
               </Link>
               <Link
                 href="/dashboard/new"
-                className="text-sm font-medium text-text transition-colors hover:text-primary"
+                className="hidden text-sm font-medium text-text transition-colors hover:text-primary md:block"
               >
                 New Application
               </Link>
               <Link
                 href="/permissions"
-                className="text-sm font-medium text-text transition-colors hover:text-primary"
+                className="hidden text-sm font-medium text-text transition-colors hover:text-primary md:block"
               >
                 Permissions
               </Link>
-              <div className="flex items-center gap-3 border-l pl-6">
+              <div className="flex items-center gap-3 border-l border-gray-200 pl-4 sm:pl-6">
                 <div className="hidden text-right sm:block">
-                  <p className="text-xs leading-none font-semibold text-primary">
+                  <p className="text-xs font-semibold leading-none text-primary">
                     {user.name}
                   </p>
                   <p className="mt-1 text-[10px] text-gray-500">{user.email}</p>
@@ -46,13 +46,13 @@ export async function Navbar() {
                 {user.picture && (
                   <img
                     src={user.picture}
-                    alt={user.name}
-                    className="h-8 w-8 rounded-full border shadow-sm"
+                    alt={user.name ?? "User"}
+                    className="h-8 w-8 rounded-full border border-gray-200 shadow-sm"
                   />
                 )}
                 <a
                   href="/auth/logout"
-                  className="rounded-md border border-danger/20 px-3 py-1.5 text-xs font-semibold text-danger transition-all hover:bg-danger/5"
+                  className="rounded-lg border border-danger/20 px-3 py-1.5 text-xs font-semibold text-danger transition-all hover:bg-danger/5"
                 >
                   Logout
                 </a>

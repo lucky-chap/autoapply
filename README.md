@@ -49,7 +49,7 @@ This project uses the Auth0 Token Vault and My Account API for secure connection
    - While in Testing mode, only manually-added test users can complete the Google consent flow
    - If requesting sensitive scopes (Gmail), Google may require a verification review — until verified, users will see an "unverified app" warning they can click through
 
-### Environment Variables
+### Environment Variables (`.env.local`)
 
 ```env
 AUTH0_DOMAIN=https://<your-tenant>.us.auth0.com
@@ -57,7 +57,32 @@ AUTH0_CLIENT_ID=<your-client-id>
 AUTH0_CLIENT_SECRET=<your-client-secret>
 AUTH0_SECRET=<random-32-byte-secret>
 APP_BASE_URL=http://localhost:3000
+NEXT_PUBLIC_CONVEX_URL=<your-convex-deployment-url>
+GLM_API_KEY=<your-glm-api-key>
 ```
+
+### Convex Environment Variables
+
+These are set in the Convex dashboard or via `npx convex env set`:
+
+```env
+AUTH0_DOMAIN=<your-tenant>.us.auth0.com
+AUTH0_M2M_CLIENT_ID=<m2m-client-id>
+AUTH0_M2M_CLIENT_SECRET=<m2m-client-secret>
+GLM_API_KEY=<your-glm-api-key>
+```
+
+**How to get these:**
+
+- **`GLM_API_KEY`** — Sign up at [open.bigmodel.cn](https://open.bigmodel.cn/) and create an API key from the dashboard.
+- **`AUTH0_M2M_CLIENT_ID` / `AUTH0_M2M_CLIENT_SECRET`** — Create or use an existing Machine-to-Machine application in Auth0:
+  1. Go to Auth0 Dashboard → Applications → **Create Application** → select **Machine to Machine** (or use the existing **API Explorer Application**)
+  2. Copy the **Client ID** and **Client Secret** from the application's **Settings** page
+  3. Go to Auth0 Dashboard → Applications → APIs → **Auth0 Management API** → **Application Access** tab
+  4. Find your M2M app, expand it, and ensure the `read:users` and `read:user_idp_tokens` scopes are checked
+  5. Click **Update** if you made changes
+
+  This M2M app is used by the automated cron job to fetch Gmail tokens for each user without requiring an active browser session.
 
 ### Automated Setup
 

@@ -13,6 +13,8 @@ import {
   MapPin,
   Briefcase,
   CircleDollarSign,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -28,6 +30,7 @@ export default function PreferencesPage() {
   const upsertPreferences = useMutation(api.preferences.upsert)
 
   const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle")
   const [roles, setRoles] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [minSalary, setMinSalary] = useState<number | "">("")
@@ -43,16 +46,19 @@ export default function PreferencesPage() {
   const handleSave = async () => {
     try {
       setIsSaving(true)
+      setSaveStatus("idle")
       await upsertPreferences({
         userId,
         targetRoles: roles,
         targetLocations: locations,
         minSalary: minSalary === "" ? undefined : Number(minSalary),
       })
-      alert("Preferences saved!")
+      setSaveStatus("saved")
+      setTimeout(() => setSaveStatus("idle"), 3000)
     } catch (error) {
       console.error("Save failed:", error)
-      alert("Failed to save preferences.")
+      setSaveStatus("error")
+      setTimeout(() => setSaveStatus("idle"), 4000)
     } finally {
       setIsSaving(false)
     }
@@ -86,7 +92,7 @@ export default function PreferencesPage() {
         Back to Dashboard
       </Link>
 
-      <div className="mb-10 flex items-center justify-between">
+      <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-bold text-primary">
             Job Preferences
@@ -95,22 +101,36 @@ export default function PreferencesPage() {
             Tell the agent what you're looking for to get the best matches.
           </p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
-        >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
+        <div className="flex items-center gap-3">
+          {saveStatus === "saved" && (
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              Saved
+            </span>
           )}
-          {isSaving ? "Saving..." : "Save Changes"}
-        </button>
+          {saveStatus === "error" && (
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-red-500">
+              <AlertCircle className="h-4 w-4" />
+              Failed to save
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-8">
-        <section className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
+        <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
               <Briefcase className="h-5 w-5" />
@@ -144,7 +164,7 @@ export default function PreferencesPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
+        <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600">
               <MapPin className="h-5 w-5" />
@@ -180,7 +200,7 @@ export default function PreferencesPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
+        <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
               <CircleDollarSign className="h-5 w-5" />

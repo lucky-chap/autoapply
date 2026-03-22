@@ -54,20 +54,8 @@ export async function POST(req: Request) {
     )
   }
 
-  // Send via Gmail API
-  const encodedEmail = encodeEmail({ to, subject, body })
-  try {
-    await sendGmailMessage(accessToken, encodedEmail)
-  } catch (err) {
-    console.error("[send-application] Gmail error:", String(err))
-    return NextResponse.json(
-      { error: `Gmail send failed: ${String(err)}` },
-      { status: 500 }
-    )
-  }
-
-  // Log to Convex — triggers real-time Kanban update
-  await convex.mutation(api.applications.create, {
+  // Create Convex record first to get applicationId for tracking pixel
+  const applicationId = await convex.mutation(api.applications.create, {
     userId,
     company,
     role,
@@ -75,5 +63,47 @@ export async function POST(req: Request) {
     recipientEmail: to,
   })
 
-  return NextResponse.json({ success: true })
+  // Build tracking pixel URL
+  const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL
+  const trackingPixelUrl = siteUrl
+    ? `${siteUrl}/track/open?id=${applicationId}`
+    : undefined
+
+  // Build sender info from session
+  const from = session.user.name && session.user.email
+    ? { name: session.user.name as string, email: session.user.email as string }
+    : undefined
+
+  // Send via Gmail API with tracking pixel
+  const encodedEmail = encodeEmail({ to, subject, body, from, trackingPixelUrl })
+  let gmailResult: { id: string; threadId: string }
+  try {
+    gmailResult = await sendGmailMessage(accessToken, encodedEmail)
+  } catch (err) {
+    // Clean up the record if send fails
+    try {
+      await convex.mutation(api.applications.deleteById, { id: applicationId })
+    } catch {
+      // Best effort cleanup
+    }
+    console.error("[send-application] Gmail error:", String(err))
+    return NextResponse.json(
+      { error: `Gmail send failed: ${String(err)}` },
+      { status: 500 }
+    )
+  }
+
+  // Store the Gmail thread ID for accurate reply checking
+  if (gmailResult.threadId) {
+    try {
+      await convex.mutation(api.applications.setThreadId, {
+        id: applicationId,
+        gmailThreadId: gmailResult.threadId,
+      })
+    } catch {
+      // Non-critical — reply checking will fall back to email search
+    }
+  }
+
+  return NextResponse.json({ success: true, applicationId })
 }

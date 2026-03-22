@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server"
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server"
 import { v } from "convex/values"
 
 // Reactive — auto-updates the UI whenever data changes
@@ -31,7 +31,88 @@ export const create = mutation({
   },
 })
 
+export const getById = query({
+  args: { id: v.id("applications") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id)
+  },
+})
+
+export const getOpens = query({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, { applicationId }) => {
+    return await ctx.db
+      .query("emailOpens")
+      .withIndex("by_applicationId", (q) => q.eq("applicationId", applicationId))
+      .order("desc")
+      .take(50)
+  },
+})
+
+export const deleteById = mutation({
+  args: { id: v.id("applications") },
+  handler: async (ctx, { id }) => {
+    await ctx.db.delete(id)
+  },
+})
+
 export const updateStatus = mutation({
+  args: {
+    id: v.id("applications"),
+    status: v.union(
+      v.literal("Applied"),
+      v.literal("Replied"),
+      v.literal("Interview"),
+      v.literal("Offer"),
+      v.literal("Rejected")
+    ),
+  },
+  handler: async (ctx, { id, status }) => {
+    await ctx.db.patch(id, { status })
+  },
+})
+
+export const setThreadId = mutation({
+  args: {
+    id: v.id("applications"),
+    gmailThreadId: v.string(),
+  },
+  handler: async (ctx, { id, gmailThreadId }) => {
+    await ctx.db.patch(id, { gmailThreadId })
+  },
+})
+
+export const recordOpen = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    userAgent: v.optional(v.string()),
+  },
+  handler: async (ctx, { applicationId, userAgent }) => {
+    await ctx.db.insert("emailOpens", {
+      applicationId,
+      openedAt: Date.now(),
+      userAgent,
+    })
+    const app = await ctx.db.get(applicationId)
+    if (app) {
+      await ctx.db.patch(applicationId, {
+        openCount: (app.openCount ?? 0) + 1,
+      })
+    }
+  },
+})
+
+export const getActiveApplications = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("applications")
+      .filter((q) => q.eq(q.field("status"), "Applied"))
+      .collect()
+  },
+})
+
+export const internalUpdateStatus = internalMutation({
   args: {
     id: v.id("applications"),
     status: v.union(

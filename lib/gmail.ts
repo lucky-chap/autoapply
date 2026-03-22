@@ -1,18 +1,66 @@
+function encodeSubject(subject: string): string {
+  // Use RFC 2047 encoded-word for non-ASCII characters
+  if (/[^\x20-\x7E]/.test(subject)) {
+    return `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`
+  }
+  return subject
+}
+
 export function encodeEmail({
   to,
   subject,
   body,
+  from,
+  trackingPixelUrl,
 }: {
   to: string
   subject: string
   body: string
+  from?: { name: string; email: string }
+  trackingPixelUrl?: string
 }): string {
-  const rawEmail = [
+  const encodedSubject = encodeSubject(subject)
+  const fromHeader = from ? `From: ${from.name} <${from.email}>` : ""
+
+  const headers = [
+    ...(fromHeader ? [fromHeader] : []),
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
+  ]
+
+  if (!trackingPixelUrl) {
+    const rawEmail = [
+      ...headers,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      "",
+      body,
+    ].join("\n")
+    return Buffer.from(rawEmail).toString("base64url")
+  }
+
+  const boundary = "----autoapply_boundary"
+  const htmlBody = body
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>")
+
+  const rawEmail = [
+    ...headers,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
     `Content-Type: text/plain; charset="UTF-8"`,
     "",
     body,
+    "",
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    "",
+    `<html><body><div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#333">${htmlBody}</div><img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body></html>`,
+    "",
+    `--${boundary}--`,
   ].join("\n")
 
   return Buffer.from(rawEmail).toString("base64url")

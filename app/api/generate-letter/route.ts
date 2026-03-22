@@ -42,7 +42,29 @@ Write a concise, personalised cover letter that:
 
 Return only the cover letter body text. No subject line, no greeting header, no sign-off name.`
 
-  const coverLetter = await callGLM(prompt)
+  let coverLetter: string
+  try {
+    coverLetter = await callGLM(prompt)
+  } catch (err) {
+    const message = String(err)
+    if (message.includes("429") || message.includes("quota")) {
+      return NextResponse.json(
+        { error: "AI service rate limit reached. Please wait a moment and try again." },
+        { status: 429 }
+      )
+    }
+    if (message.includes("timeout") || message.includes("ETIMEDOUT")) {
+      return NextResponse.json(
+        { error: "AI service timed out. Please try again." },
+        { status: 504 }
+      )
+    }
+    console.error("[generate-letter] GLM error:", message)
+    return NextResponse.json(
+      { error: "Failed to generate cover letter. Please try again." },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ coverLetter })
 }

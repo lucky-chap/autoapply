@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { useUser } from "@auth0/nextjs-auth0/client"
 import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Wand2,
+  X,
 } from "lucide-react"
 
 type Step = "input" | "preview" | "sent"
@@ -55,6 +56,7 @@ function NewApplicationContent() {
   const [isSending, setIsSending] = useState(false)
   const [showStepUp, setShowStepUp] = useState(false)
   const [error, setError] = useState("")
+  const [applicationId, setApplicationId] = useState<string | null>(null)
   const [restored, setRestored] = useState(false)
 
   // Restore saved draft from sessionStorage on mount (survives step-up auth redirect)
@@ -87,8 +89,10 @@ function NewApplicationContent() {
   // Check if we returned from step-up auth — send directly from sessionStorage
   // (React state may not be updated yet when this runs)
   const steppedUp = searchParams.get("stepped_up") === "true"
+  const hasSentRef = useRef(false)
   useEffect(() => {
-    if (!restored || !steppedUp || !user) return
+    if (!restored || !steppedUp || !user || hasSentRef.current) return
+    hasSentRef.current = true
 
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY)
@@ -119,6 +123,9 @@ function NewApplicationContent() {
           if (!res.ok) {
             setError(data.error || data.detail || "Send failed.")
             return
+          }
+          if (data.applicationId) {
+            setApplicationId(data.applicationId)
           }
           sessionStorage.removeItem(STORAGE_KEY)
           setStep("sent")
@@ -229,6 +236,9 @@ function NewApplicationContent() {
         return
       }
 
+      if (data.applicationId) {
+        setApplicationId(data.applicationId)
+      }
       sessionStorage.removeItem(STORAGE_KEY)
       setStep("sent")
     } catch {
@@ -316,9 +326,15 @@ function NewApplicationContent() {
       )}
 
       {error && (
-        <div className="mb-6 flex gap-3 rounded-xl border border-red-100 bg-red-50 p-4">
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 p-4">
           <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
-          <p className="text-sm text-red-700">{error}</p>
+          <p className="flex-1 text-sm text-red-700">{error}</p>
+          <button
+            onClick={() => setError("")}
+            className="shrink-0 rounded-full p-0.5 text-red-400 transition-colors hover:bg-red-100 hover:text-red-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -340,7 +356,7 @@ function NewApplicationContent() {
                   onChange={(e) => setJobDescription(e.target.value)}
                   placeholder="Paste the full job description here..."
                   rows={10}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm leading-relaxed transition-colors focus:border-primary focus:outline-none"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base leading-relaxed transition-colors focus:border-primary focus:outline-none sm:text-sm"
                 />
                 <button
                   type="button"
@@ -372,7 +388,7 @@ function NewApplicationContent() {
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     placeholder={isExtracting ? "Detecting..." : "e.g. Stripe"}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm transition-colors focus:border-primary focus:outline-none"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base transition-colors focus:border-primary focus:outline-none sm:text-sm"
                   />
                 </div>
                 <div>
@@ -384,30 +400,45 @@ function NewApplicationContent() {
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
                     placeholder={isExtracting ? "Detecting..." : "e.g. Senior Frontend Engineer"}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm transition-colors focus:border-primary focus:outline-none"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base transition-colors focus:border-primary focus:outline-none sm:text-sm"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || !hasProfile || isExtracting}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Generating Cover Letter...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-5 w-5" />
-                Generate Cover Letter with AI
-              </>
-            )}
-          </button>
+          {isGenerating ? (
+            <div className="space-y-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/10">
+                  <Sparkles className="h-5 w-5 animate-pulse text-secondary" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-primary">Generating your cover letter...</p>
+                  <p className="text-xs text-gray-400">AI is tailoring it to the job description</p>
+                </div>
+              </div>
+              <div className="animate-pulse space-y-2.5">
+                <div className="h-3.5 w-full rounded bg-gray-100" />
+                <div className="h-3.5 w-11/12 rounded bg-gray-100" />
+                <div className="h-3.5 w-4/5 rounded bg-gray-50" />
+                <div className="h-3.5 w-full rounded bg-gray-100" />
+                <div className="h-3.5 w-3/4 rounded bg-gray-50" />
+                <div className="h-3.5 w-full rounded bg-gray-100" />
+                <div className="h-3.5 w-5/6 rounded bg-gray-100" />
+                <div className="h-3.5 w-2/3 rounded bg-gray-50" />
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={handleGenerate}
+              disabled={!hasProfile || isExtracting}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+            >
+              <Sparkles className="h-5 w-5" />
+              Generate Cover Letter with AI
+            </button>
+          )}
         </div>
       )}
 
@@ -435,7 +466,7 @@ function NewApplicationContent() {
                 value={coverLetter}
                 onChange={(e) => setCoverLetter(e.target.value)}
                 rows={12}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm leading-relaxed transition-colors focus:border-primary focus:outline-none"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base leading-relaxed transition-colors focus:border-primary focus:outline-none sm:text-sm"
               />
             </div>
 
@@ -448,7 +479,7 @@ function NewApplicationContent() {
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 placeholder="e.g. hiring@stripe.com"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm transition-colors focus:border-primary focus:outline-none"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base transition-colors focus:border-primary focus:outline-none sm:text-sm"
               />
               {!recipientEmail && (
                 <p className="mt-1.5 text-xs text-gray-400">
@@ -458,17 +489,17 @@ function NewApplicationContent() {
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() => setStep("input")}
-              className="flex-1 rounded-xl border border-gray-200 px-6 py-4 text-sm font-bold text-gray-600 transition-all hover:bg-gray-50"
+              className="w-full rounded-xl border border-gray-200 px-6 py-4 text-sm font-bold text-gray-600 transition-all hover:bg-gray-50 sm:flex-1"
             >
               Back to Edit
             </button>
             <button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="flex items-center gap-2 rounded-xl border border-primary/20 px-6 py-4 text-sm font-bold text-primary transition-all hover:bg-primary/5"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/20 px-6 py-4 text-sm font-bold text-primary transition-all hover:bg-primary/5 sm:w-auto"
             >
               <Sparkles className="h-4 w-4" />
               Regenerate
@@ -476,7 +507,7 @@ function NewApplicationContent() {
             <button
               onClick={handleSend}
               disabled={isSending || !recipientEmail.trim()}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 sm:flex-1"
             >
               {isSending ? (
                 <>
@@ -528,7 +559,7 @@ function NewApplicationContent() {
               Apply to Another
             </Link>
             <Link
-              href="/dashboard"
+              href={applicationId ? `/dashboard/tracker/${applicationId}` : "/dashboard"}
               className="rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5"
             >
               View Tracker

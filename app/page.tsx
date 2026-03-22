@@ -37,7 +37,7 @@ export default async function Home() {
         </button>
       </div>
 
-      <div className="mt-24 flex flex-wrap justify-center gap-8 border-t border-gray-100 pt-12 opacity-40 grayscale">
+      <div className="mt-16 flex flex-wrap justify-center gap-4 border-t border-gray-100 pt-10 opacity-40 grayscale sm:mt-24 sm:gap-8 sm:pt-12">
         <span className="font-display font-medium">Auth0 Token Vault</span>
         <span className="font-display font-medium">Convex</span>
         <span className="font-display font-medium">GLM-5</span>

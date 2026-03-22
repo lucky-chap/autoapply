@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ShieldCheck, Loader2, X } from "lucide-react"
 
 interface StepUpModalProps {
@@ -15,20 +15,47 @@ export function StepUpModal({
   onAuthenticated,
 }: StepUpModalProps) {
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const [animating, setAnimating] = useState(false)
 
-  if (!isOpen) return null
+  useEffect(() => {
+    if (isOpen) {
+      setVisible(true)
+      // Trigger enter animation on next frame
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setAnimating(true))
+      })
+    } else {
+      setAnimating(false)
+      const timer = setTimeout(() => setVisible(false), 200)
+      return () => clearTimeout(timer)
+    }
+  }, [isOpen])
+
+  if (!visible) return null
 
   const handleStepUp = () => {
     setIsRedirecting(true)
-    // Redirect to Auth0 login with step-up auth parameters
-    // After re-auth, the user will be redirected back and the session will have fresh auth_time
     const returnTo = encodeURIComponent(window.location.pathname + "?stepped_up=true")
     window.location.href = `/auth/login?prompt=login&returnTo=${returnTo}`
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative mx-4 w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-all duration-200 ${
+        animating ? "bg-black/50 backdrop-blur-sm" : "bg-black/0 backdrop-blur-none"
+      }`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        className={`relative mx-4 w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl transition-all duration-200 sm:p-8 ${
+          animating
+            ? "translate-y-0 scale-100 opacity-100"
+            : "translate-y-4 scale-95 opacity-0"
+        }`}
+      >
         <button
           onClick={onClose}
           className="absolute right-4 top-4 rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
@@ -79,7 +106,7 @@ export function StepUpModal({
           </button>
 
           <p className="mt-4 text-[10px] text-gray-400">
-            You'll be redirected to Auth0 for verification, then returned here.
+            You&apos;ll be redirected to Auth0 for verification, then returned here.
           </p>
         </div>
       </div>

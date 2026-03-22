@@ -11,4 +11,5 @@ export const auth0 = new Auth0Client({
   secret: process.env.AUTH0_SECRET!,
   appBaseUrl: process.env.APP_BASE_URL!,
   enableConnectAccountEndpoint: true,
+  httpTimeout: 10000,
 })

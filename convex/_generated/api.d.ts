@@ -9,6 +9,9 @@
  */
 
 import type * as applications from "../applications.js";
+import type * as crons from "../crons.js";
+import type * as http from "../http.js";
+import type * as inboxChecker from "../inboxChecker.js";
 import type * as preferences from "../preferences.js";
 import type * as resumeProfiles from "../resumeProfiles.js";
 
@@ -20,6 +23,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   applications: typeof applications;
+  crons: typeof crons;
+  http: typeof http;
+  inboxChecker: typeof inboxChecker;
   preferences: typeof preferences;
   resumeProfiles: typeof resumeProfiles;
 }>;
