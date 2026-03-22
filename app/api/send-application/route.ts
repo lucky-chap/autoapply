@@ -10,17 +10,28 @@ export async function POST(req: Request) {
   const session = await auth0.getSession()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Check for step-up auth — require recent MFA
-  const claims = session.user
-  const authTime = claims.auth_time as number | undefined
-  const now = Math.floor(Date.now() / 1000)
-  const MAX_AGE_SECONDS = 300 // 5 minutes — user must have authenticated recently
+  // Step-up auth: require recent authentication
+  // Decode the ID token to get iat (issued-at) since session.user doesn't include it
+  const tokenSet = session.tokenSet as { idToken?: string; expiresAt?: number } | undefined
+  let iat: number | undefined
+  if (tokenSet?.idToken) {
+    try {
+      const payload = JSON.parse(Buffer.from(tokenSet.idToken.split(".")[1], "base64url").toString())
+      iat = payload.iat as number
+    } catch {
+      // fall back to expiresAt - 24h
+      if (tokenSet.expiresAt) iat = tokenSet.expiresAt - 86400
+    }
+  }
 
-  if (!authTime || now - authTime > MAX_AGE_SECONDS) {
+  const now = Math.floor(Date.now() / 1000)
+  const MAX_AGE_SECONDS = 300 // 5 minutes
+
+  if (!iat || now - iat > MAX_AGE_SECONDS) {
     return NextResponse.json(
       {
         requiresStepUp: true,
-        message: "Step-up authentication required. Please re-authenticate with MFA.",
+        message: "Step-up authentication required. Please re-authenticate.",
       },
       { status: 403 }
     )
@@ -48,8 +59,9 @@ export async function POST(req: Request) {
   try {
     await sendGmailMessage(accessToken, encodedEmail)
   } catch (err) {
+    console.error("[send-application] Gmail error:", String(err))
     return NextResponse.json(
-      { error: "Gmail send failed", detail: String(err) },
+      { error: `Gmail send failed: ${String(err)}` },
       { status: 500 }
     )
   }

@@ -37,7 +37,13 @@ This project uses the Auth0 Token Vault and My Account API for secure connection
      - `https://www.googleapis.com/auth/gmail.send`
      - `https://www.googleapis.com/auth/gmail.readonly`
 
-9. **Publish Google OAuth App**:
+9. **Enable Gmail API on Google Cloud**:
+   - Go to [Google Cloud Console → Gmail API](https://console.developers.google.com/apis/api/gmail.googleapis.com/overview)
+   - Select the same project used for your Google OAuth credentials
+   - Click **"Enable"** to activate the Gmail API
+   - This only needs to be done once — all users authenticate through your project
+
+10. **Publish Google OAuth App**:
    - Go to [Google Cloud Console → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
    - Click **"Publish App"** to allow any Google user to authorize
    - While in Testing mode, only manually-added test users can complete the Google consent flow

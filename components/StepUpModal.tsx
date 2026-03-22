@@ -22,9 +22,8 @@ export function StepUpModal({
     setIsRedirecting(true)
     // Redirect to Auth0 login with step-up auth parameters
     // After re-auth, the user will be redirected back and the session will have fresh auth_time
-    window.location.href =
-      "/auth/login?returnTo=" +
-      encodeURIComponent(window.location.pathname + "?stepped_up=true")
+    const returnTo = encodeURIComponent(window.location.pathname + "?stepped_up=true")
+    window.location.href = `/auth/login?prompt=login&returnTo=${returnTo}`
   }
 
   return (
