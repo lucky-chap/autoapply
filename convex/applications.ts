@@ -88,6 +88,18 @@ export const recordOpen = internalMutation({
     userAgent: v.optional(v.string()),
   },
   handler: async (ctx, { applicationId, userAgent }) => {
+    // Deduplicate: skip if this application was opened within the last 5 minutes
+    const fiveMinAgo = Date.now() - 5 * 60 * 1000
+    const recentOpen = await ctx.db
+      .query("emailOpens")
+      .withIndex("by_applicationId", (q) => q.eq("applicationId", applicationId))
+      .order("desc")
+      .first()
+
+    if (recentOpen && recentOpen.openedAt > fiveMinAgo) {
+      return // Skip rapid-fire duplicate from same email view
+    }
+
     await ctx.db.insert("emailOpens", {
       applicationId,
       openedAt: Date.now(),
@@ -107,8 +119,54 @@ export const getActiveApplications = internalQuery({
   handler: async (ctx) => {
     return await ctx.db
       .query("applications")
-      .filter((q) => q.eq(q.field("status"), "Applied"))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "Applied"),
+          q.eq(q.field("status"), "Replied"),
+          q.eq(q.field("status"), "Interview")
+        )
+      )
       .collect()
+  },
+})
+
+export const internalCreate = internalMutation({
+  args: {
+    userId: v.string(),
+    company: v.string(),
+    role: v.string(),
+    coverLetter: v.string(),
+    recipientEmail: v.string(),
+    source: v.optional(v.union(v.literal("web"), v.literal("telegram"))),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("applications", {
+      ...args,
+      status: "Applied",
+      emailSentAt: Date.now(),
+      createdAt: Date.now(),
+    })
+  },
+})
+
+export const internalSetThreadId = internalMutation({
+  args: {
+    id: v.id("applications"),
+    gmailThreadId: v.string(),
+  },
+  handler: async (ctx, { id, gmailThreadId }) => {
+    await ctx.db.patch(id, { gmailThreadId })
+  },
+})
+
+export const getRecentByUserInternal = internalQuery({
+  args: { userId: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, { userId, limit }) => {
+    return await ctx.db
+      .query("applications")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(limit ?? 5)
   },
 })
 

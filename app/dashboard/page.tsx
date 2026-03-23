@@ -13,6 +13,9 @@ import {
   CheckInboxButton,
 } from "@/components/DashboardClient"
 import { ResumeProfileBox } from "@/components/ResumeProfileBox"
+import { PendingActions } from "@/components/PendingActions"
+import { TelegramLinkCard } from "@/components/TelegramLinkCard"
+import { TelegramLinkedDialog } from "@/components/TelegramLinkedDialog"
 
 export default async function DashboardPage() {
   const session = await auth0.getSession()
@@ -24,6 +27,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <TelegramLinkedDialog />
       {/* Header */}
       <div className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
@@ -49,6 +53,8 @@ export default async function DashboardPage() {
         <div className="space-y-8 lg:col-span-2">
           <ResumeProfileBox userId={user.sub} />
 
+          <PendingActions userId={user.sub} />
+
           <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
             <div className="border-b border-gray-50 p-6">
               <h2 className="font-display text-xl font-bold text-primary">
@@ -73,6 +79,8 @@ export default async function DashboardPage() {
           </div>
 
           <CheckInboxButton />
+
+          <TelegramLinkCard userId={user.sub} />
 
           <nav className="space-y-1 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
             <Link

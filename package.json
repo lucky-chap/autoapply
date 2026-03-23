@@ -10,7 +10,8 @@
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
-    "setup": "npx tsx scripts/setup-auth0.ts"
+    "setup": "npx tsx scripts/setup-auth0.ts",
+    "setup:telegram": "npx tsx scripts/setup-telegram.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.37",

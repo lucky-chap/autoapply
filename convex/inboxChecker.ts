@@ -1,5 +1,19 @@
 import { internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
+import {
+  getGmailTokenViaTokenVault,
+  getAuth0ManagementToken,
+  getUserEmail,
+} from "./tokenVault"
+
+// Decode base64url to UTF-8 string (Convex runtime has no Node Buffer)
+function fromBase64Url(data: string): string {
+  const base64 = data.replace(/-/g, "+").replace(/_/g, "/")
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4)
+  const binary = atob(padded)
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
 
 const GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
@@ -26,52 +40,7 @@ async function callGLM(prompt: string, apiKey: string): Promise<string> {
   return data.choices[0].message.content ?? ""
 }
 
-async function getAuth0ManagementToken(
-  domain: string,
-  clientId: string,
-  clientSecret: string
-): Promise<string> {
-  const res = await fetch(`https://${domain}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-      audience: `https://${domain}/api/v2/`,
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Auth0 M2M token error (${res.status}): ${err}`)
-  }
-
-  const data = await res.json()
-  return data.access_token
-}
-
-async function getGmailTokenForUser(
-  domain: string,
-  managementToken: string,
-  userId: string
-): Promise<string | null> {
-  const res = await fetch(
-    `https://${domain}/api/v2/users/${encodeURIComponent(userId)}?fields=identities`,
-    {
-      headers: { Authorization: `Bearer ${managementToken}` },
-    }
-  )
-
-  if (!res.ok) return null
-
-  const data = await res.json()
-  const googleIdentity = data.identities?.find(
-    (id: { connection: string }) => id.connection === "google-oauth2"
-  )
-
-  return googleIdentity?.access_token ?? null
-}
+// Auth helpers moved to tokenVault.ts
 
 function extractBody(payload: {
   parts?: { mimeType: string; body?: { data?: string } }[]
@@ -82,11 +51,11 @@ function extractBody(payload: {
       (p: { mimeType: string }) => p.mimeType === "text/plain"
     )
     if (textPart?.body?.data) {
-      return Buffer.from(textPart.body.data, "base64url").toString("utf-8")
+      return fromBase64Url(textPart.body.data)
     }
   }
   if (payload.body?.data) {
-    return Buffer.from(payload.body.data, "base64url").toString("utf-8")
+    return fromBase64Url(payload.body.data)
   }
   return ""
 }
@@ -99,7 +68,8 @@ async function checkReplyForApp(
     role: string
     company: string
   },
-  accessToken: string
+  accessToken: string,
+  senderEmail: string
 ): Promise<{ mimePayload: unknown } | null> {
   if (app.gmailThreadId) {
     const threadRes = await fetch(
@@ -108,12 +78,23 @@ async function checkReplyForApp(
     )
     if (threadRes.ok) {
       const thread = await threadRes.json()
-      const replies = (thread.messages || []).filter(
+      const messages = thread.messages || []
+
+      // Skip if thread only has 1 message (the one we sent)
+      if (messages.length <= 1) return null
+
+      // Find messages NOT sent by us (i.e. replies from the recipient)
+      const replies = messages.filter(
         (msg: { payload?: { headers?: { name: string; value: string }[] } }) => {
           const fromHeader = msg.payload?.headers?.find(
             (h: { name: string }) => h.name.toLowerCase() === "from"
           )
-          return fromHeader && fromHeader.value.includes(app.recipientEmail)
+          if (!fromHeader) return false
+          const fromValue = fromHeader.value.toLowerCase()
+          // Exclude messages from ourselves
+          if (senderEmail && fromValue.includes(senderEmail.toLowerCase())) return false
+          // Must be from someone (ideally the recipient)
+          return true
         }
       )
       if (replies.length > 0) {
@@ -147,9 +128,6 @@ async function checkReplyForApp(
 export const checkAllInboxes = internalAction({
   args: {},
   handler: async (ctx) => {
-    const domain = process.env.AUTH0_DOMAIN!
-    const m2mClientId = process.env.AUTH0_M2M_CLIENT_ID!
-    const m2mClientSecret = process.env.AUTH0_M2M_CLIENT_SECRET!
     const glmApiKey = process.env.GLM_API_KEY!
 
     const applications = await ctx.runQuery(
@@ -170,26 +148,30 @@ export const checkAllInboxes = internalAction({
       byUser.set(app.userId, list)
     }
 
-    const managementToken = await getAuth0ManagementToken(
-      domain,
-      m2mClientId,
-      m2mClientSecret
-    )
-
     let totalChecked = 0
     let totalUpdated = 0
 
-    for (const [userId, userApps] of byUser) {
-      const gmailToken = await getGmailTokenForUser(
-        domain,
-        managementToken,
-        userId
-      )
+    // Get management token once for all user lookups
+    let managementToken: string
+    try {
+      managementToken = await getAuth0ManagementToken()
+    } catch (err) {
+      console.log(`[cron] Failed to get management token: ${err}`)
+      return
+    }
 
-      if (!gmailToken) {
-        console.log(`[cron] No Gmail token for user ${userId}, skipping.`)
+    for (const [userId, userApps] of byUser) {
+      let gmailToken: string
+      try {
+        gmailToken = await getGmailTokenViaTokenVault(ctx, userId)
+      } catch (err) {
+        console.log(`[cron] Token Vault failed for user ${userId}: ${err}`)
         continue
       }
+
+      // Get sender email to filter out our own messages from threads
+      const userInfo = await getUserEmail(managementToken, userId)
+      const senderEmail = userInfo?.email ?? ""
 
       for (const app of userApps) {
         totalChecked++
@@ -201,7 +183,8 @@ export const checkAllInboxes = internalAction({
             role: app.role,
             company: app.company,
           },
-          gmailToken
+          gmailToken,
+          senderEmail
         )
 
         if (!reply) continue
@@ -221,16 +204,34 @@ The candidate applied for the role of "${app.role}" at "${app.company}".
 EMAIL REPLY:
 ${bodyText.slice(0, 2000)}
 
-Classify this email into EXACTLY ONE of these categories:
-- "Replied" — general acknowledgement or interest
-- "Interview" — scheduling an interview or requesting availability
-- "Offer" — extending a job offer
-- "Rejected" — rejection or position filled
+Return a JSON object with two fields:
+1. "status" — EXACTLY ONE of: "Replied", "Interview", "Offer", "Rejected"
+   - "Replied" — general acknowledgement or interest
+   - "Interview" — scheduling an interview or requesting availability
+   - "Offer" — extending a job offer
+   - "Rejected" — rejection or position filled
+2. "summary" — A 1-2 sentence plain text summary of what the reply says, so the candidate knows what it's about without reading the full email
 
-Return ONLY the category word, nothing else.`
+Return ONLY the JSON object, no markdown, no explanation.`
 
-        const classification = await callGLM(classifyPrompt, glmApiKey)
-        const status = classification.trim().replace(/['"]/g, "")
+        const classificationRaw = await callGLM(classifyPrompt, glmApiKey)
+        let status = ""
+        let replySummary = ""
+        try {
+          const cleaned = classificationRaw
+            .replace(/^```(?:json)?\s*/i, "")
+            .replace(/\s*```\s*$/, "")
+            .trim()
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0])
+            status = String(parsed.status || "").trim().replace(/['"]/g, "")
+            replySummary = String(parsed.summary || "").trim()
+          }
+        } catch {
+          // Fallback: treat raw output as just the status
+          status = classificationRaw.trim().replace(/['"]/g, "")
+        }
 
         const validStatuses = [
           "Replied",
@@ -242,12 +243,31 @@ Return ONLY the category word, nothing else.`
           (s) => status.toLowerCase() === s.toLowerCase()
         )
 
-        if (matchedStatus) {
+        if (matchedStatus && matchedStatus !== app.status) {
           await ctx.runMutation(
             internal.applications.internalUpdateStatus,
             { id: app._id, status: matchedStatus }
           )
           totalUpdated++
+
+          // Send Telegram notification if user has a linked account
+          const telegramLink = await ctx.runQuery(
+            internal.telegramLinks.getLinkByUserIdInternal,
+            { userId: app.userId }
+          )
+          if (telegramLink) {
+            const emoji =
+              matchedStatus === "Interview" ? "📅" :
+              matchedStatus === "Offer" ? "🎉" :
+              matchedStatus === "Rejected" ? "😔" : "💬"
+            const summaryLine = replySummary
+              ? `\n\n📝 *Summary:* ${replySummary}`
+              : ""
+            await ctx.runAction(internal.telegram.sendNotification, {
+              chatId: telegramLink.telegramChatId,
+              text: `${emoji} *${app.company}* update for *${app.role}*\n\nStatus: *${matchedStatus}*${summaryLine}`,
+            })
+          }
         }
       }
     }

@@ -40,6 +40,19 @@ export async function POST(req: Request) {
   const { to, subject, body, company, role, coverLetter } = await req.json()
   const userId = session.user.sub
 
+  // Store refresh token so backend (cron, Telegram) can exchange it later
+  const refreshToken = (session.tokenSet as { refreshToken?: string })?.refreshToken
+  if (refreshToken) {
+    try {
+      await convex.mutation(api.userTokens.upsertRefreshToken, {
+        userId,
+        auth0RefreshToken: refreshToken,
+      })
+    } catch {
+      // Non-critical
+    }
+  }
+
   // Retrieve Gmail token from Token Vault
   let accessToken: string
   try {

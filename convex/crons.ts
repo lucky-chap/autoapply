@@ -5,8 +5,22 @@ const crons = cronJobs()
 
 crons.interval(
   "check inboxes for replies",
-  { minutes: 15 },
+  { minutes: 5 },
   internal.inboxChecker.checkAllInboxes,
+  {}
+)
+
+crons.interval(
+  "cleanup expired linking codes and stale pending actions",
+  { hours: 1 },
+  internal.telegramLinks.cleanup,
+  {}
+)
+
+crons.interval(
+  "cleanup stale pending actions",
+  { hours: 1 },
+  internal.pendingActions.cleanupStale,
   {}
 )
 

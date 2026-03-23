@@ -8,12 +8,18 @@
  * @module
  */
 
+import type * as aiActions from "../aiActions.js";
 import type * as applications from "../applications.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as inboxChecker from "../inboxChecker.js";
+import type * as pendingActions from "../pendingActions.js";
 import type * as preferences from "../preferences.js";
 import type * as resumeProfiles from "../resumeProfiles.js";
+import type * as telegram from "../telegram.js";
+import type * as telegramLinks from "../telegramLinks.js";
+import type * as tokenVault from "../tokenVault.js";
+import type * as userTokens from "../userTokens.js";
 
 import type {
   ApiFromModules,
@@ -22,12 +28,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  aiActions: typeof aiActions;
   applications: typeof applications;
   crons: typeof crons;
   http: typeof http;
   inboxChecker: typeof inboxChecker;
+  pendingActions: typeof pendingActions;
   preferences: typeof preferences;
   resumeProfiles: typeof resumeProfiles;
+  telegram: typeof telegram;
+  telegramLinks: typeof telegramLinks;
+  tokenVault: typeof tokenVault;
+  userTokens: typeof userTokens;
 }>;
 
 /**

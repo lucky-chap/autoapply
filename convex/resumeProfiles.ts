@@ -1,7 +1,17 @@
-import { query, mutation } from "./_generated/server"
+import { query, mutation, internalQuery } from "./_generated/server"
 import { v } from "convex/values"
 
 export const getByUser = query({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    return await ctx.db
+      .query("resumeProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first()
+  },
+})
+
+export const getByUserInternal = internalQuery({
   args: { userId: v.string() },
   handler: async (ctx, { userId }) => {
     return await ctx.db

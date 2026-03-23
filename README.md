@@ -1,3 +1,19 @@
+# AutoApply
+
+AI-powered job application automation. Upload your resume, paste a job description, and AutoApply generates a personalized cover letter and sends it via your Gmail — from the web dashboard or a Telegram bot.
+
+## Quick Start
+
+```bash
+pnpm install
+npm run setup              # Configure Auth0 MRRT policies
+npm run setup:telegram     # Register Telegram bot webhook
+npx convex dev             # Start Convex backend (terminal 1)
+pnpm dev                   # Start Next.js frontend (terminal 2)
+```
+
+---
+
 ## Auth0 Setup
 
 This project uses the Auth0 Token Vault and My Account API for secure connection management.
@@ -67,14 +83,25 @@ These are set in the Convex dashboard or via `npx convex env set`:
 
 ```env
 AUTH0_DOMAIN=<your-tenant>.us.auth0.com
+AUTH0_CLIENT_ID=<your-web-app-client-id>
+AUTH0_CLIENT_SECRET=<your-web-app-client-secret>
 AUTH0_M2M_CLIENT_ID=<m2m-client-id>
 AUTH0_M2M_CLIENT_SECRET=<m2m-client-secret>
 GLM_API_KEY=<your-glm-api-key>
+TELEGRAM_BOT_TOKEN=<bot-token-from-botfather>
+TELEGRAM_WEBHOOK_SECRET=<random-hex-string>
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_CONVEX_SITE_URL=<your-convex-site-url>
 ```
 
 **How to get these:**
 
+- **`AUTH0_CLIENT_ID` / `AUTH0_CLIENT_SECRET`** — These are the same credentials as in your `.env.local` (your Regular Web Application). The Convex backend uses them to exchange stored refresh tokens for fresh Google access tokens via Token Vault. Make sure the **Token Vault** grant type is enabled: Auth0 Dashboard → Applications → your app → **Advanced Settings → Grant Types → Token Vault** checkbox.
 - **`GLM_API_KEY`** — Sign up at [open.bigmodel.cn](https://open.bigmodel.cn/) and create an API key from the dashboard.
+- **`TELEGRAM_BOT_TOKEN`** — Open Telegram, message [@BotFather](https://t.me/BotFather), send `/newbot`, follow the prompts, and copy the token it gives you (looks like `123456789:ABCdefGhIjKlmNoPQRsTuVwXyZ`).
+- **`TELEGRAM_WEBHOOK_SECRET`** — Any random string used to verify webhook requests from Telegram. Generate one with: `openssl rand -hex 32`
+- **`NEXT_PUBLIC_SITE_URL`** — Your app's public URL (`http://localhost:3000` for dev, your production domain when deployed). Used in the Telegram linking flow.
+- **`NEXT_PUBLIC_CONVEX_SITE_URL`** (**required**) — Your Convex deployment's HTTP Actions URL (e.g. `https://<your-slug>.convex.site`). Found in your Convex dashboard under Deployment Settings. **Must be set in both `.env.local` and as a Convex env var** — it's used for the email open tracking pixel and the Telegram webhook endpoint. Without this, email open tracking will not work.
 - **`AUTH0_M2M_CLIENT_ID` / `AUTH0_M2M_CLIENT_SECRET`** — Create or use an existing Machine-to-Machine application in Auth0:
   1. Go to Auth0 Dashboard → Applications → **Create Application** → select **Machine to Machine** (or use the existing **API Explorer Application**)
   2. Copy the **Client ID** and **Client Secret** from the application's **Settings** page
@@ -82,7 +109,7 @@ GLM_API_KEY=<your-glm-api-key>
   4. Find your M2M app, expand it, and ensure the `read:users` and `read:user_idp_tokens` scopes are checked
   5. Click **Update** if you made changes
 
-  This M2M app is used by the automated cron job to fetch Gmail tokens for each user without requiring an active browser session.
+  This M2M app is used to look up user info (email/name) without requiring an active browser session.
 
 ### Automated Setup
 
@@ -103,3 +130,95 @@ The script is idempotent and safe to run multiple times. After running it, **log
 - **"An unexpected error occurred while trying to initiate the connect account flow"**: The My Account API may not be enabled, or the connect account ticket creation failed. See step 5 above.
 - **"Grant type 'urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token' not allowed"**: The Token Vault grant type is not enabled. See step 3 above.
 - **After changing Auth0 config**: Always log out and log back in to get a fresh session with the updated token set.
+
+---
+
+## Telegram Bot Setup
+
+The Telegram bot is a **single shared bot** for the entire platform — you set it up once during deployment. Individual users link their Telegram account from within the bot.
+
+### 1. Create the bot
+
+1. Open Telegram and message [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow the prompts to name your bot
+3. Copy the **bot token** (looks like `123456789:ABCdefGhIjKlmNoPQRsTuVwXyZ`)
+
+### 2. Set Convex environment variables
+
+```bash
+# The bot token from BotFather
+npx convex env set TELEGRAM_BOT_TOKEN <your-bot-token>
+
+# A random secret to verify webhook requests (generate one below)
+npx convex env set TELEGRAM_WEBHOOK_SECRET $(openssl rand -hex 32)
+
+# Your app's public URL (for linking flow)
+npx convex env set NEXT_PUBLIC_SITE_URL http://localhost:3000
+```
+
+### 3. Register the webhook
+
+```bash
+npm run setup:telegram
+```
+
+This calls the Telegram API to point your bot's webhook at your Convex HTTP endpoint (`/telegram/webhook`). The script reads `CONVEX_URL` from `.env.local` and derives the site URL automatically.
+
+### How users connect
+
+1. User opens the bot on Telegram and types `/link`
+2. Bot sends a temporary link (expires in 15 minutes)
+3. User clicks the link and authenticates on the web app
+4. Their Telegram chat is now linked to their AutoApply account
+5. They can send job descriptions directly to the bot to apply
+
+### Troubleshooting
+
+- **Bot not responding**: Make sure `npx convex dev` is running and the webhook is registered (`npm run setup:telegram`)
+- **"Please link your account first"**: User needs to run `/link` in the bot and complete web authentication
+- **Webhook registration fails**: Verify `TELEGRAM_BOT_TOKEN` is correct and `CONVEX_URL` is set in `.env.local`
+
+---
+
+## Token Vault Setup
+
+Token Vault lets the Convex backend get **fresh Google access tokens** for any user without requiring an active browser session. This is used by:
+
+- The **Telegram bot** when sending emails on behalf of users
+- The **cron inbox checker** that monitors for recruiter replies
+
+Without this, Google access tokens expire after ~1 hour and background operations fail with `401 UNAUTHENTICATED`.
+
+### How it works
+
+1. When a user interacts with the web app (sends an application or links Telegram), their Auth0 **refresh token** is stored in Convex
+2. When the backend needs a Google token, it exchanges that refresh token at Auth0's `/oauth/token` endpoint using the Token Vault grant type
+3. Auth0 uses its stored Google credentials to return a **fresh** Google access token
+4. The backend uses the fresh token to call the Gmail API
+
+### Setup
+
+1. **Enable the Token Vault grant type** on your Auth0 application:
+   - Go to Auth0 Dashboard → Applications → your Regular Web Application
+   - Go to **Advanced Settings → Grant Types**
+   - Check **Token Vault** (in addition to Authorization Code and Refresh Token)
+   - Click **Save Changes**
+
+2. **Disable refresh token rotation** (required for Token Vault refresh token exchange):
+   - In the same application settings, go to **Refresh Token Rotation**
+   - Set it to **Disabled** (or ensure it's not enabled)
+
+3. **Set the Convex env vars** (same values as in `.env.local`):
+   ```bash
+   npx convex env set AUTH0_CLIENT_ID <your-client-id>
+   npx convex env set AUTH0_CLIENT_SECRET <your-client-secret>
+   ```
+
+4. **Log out and log back in** to get a fresh session with a refresh token
+
+### Troubleshooting
+
+- **"No refresh token stored for this user"**: The user needs to use the web app at least once (send an application or link Telegram) so the app can capture their Auth0 refresh token.
+- **"Token Vault exchange failed (400)"**: The Token Vault grant type may not be enabled on your Auth0 app. Check Advanced Settings → Grant Types → Token Vault.
+- **"Token Vault exchange failed (403)"**: The user hasn't connected their Google account via the Permissions page yet. They need to connect Google first.
+- **"Unknown or invalid refresh token"**: The stored refresh token may have expired or been revoked. The user needs to log out and log back in, then perform any action on the web app to refresh the stored token.

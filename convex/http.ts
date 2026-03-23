@@ -45,4 +45,22 @@ http.route({
   }),
 })
 
+// Telegram bot webhook
+http.route({
+  path: "/telegram/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    // Verify the request comes from Telegram
+    const secretToken = req.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if (secretToken !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+      return new Response("Unauthorized", { status: 401 })
+    }
+
+    const update = await req.text()
+    // Schedule instead of await — return 200 immediately so Telegram doesn't retry
+    await ctx.scheduler.runAfter(0, internal.telegram.processUpdate, { update })
+    return new Response("OK", { status: 200 })
+  }),
+})
+
 export default http
