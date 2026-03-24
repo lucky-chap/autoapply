@@ -53,7 +53,7 @@ export async function POST(req: Request) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${process.env.CONVEX_API_SECRET}`,
           },
-          body: JSON.stringify({ userId, auth0RefreshToken: encrypt(refreshToken) }),
+          body: JSON.stringify({ userId, auth0RefreshToken: await encrypt(refreshToken) }),
         })
       }
     } catch {

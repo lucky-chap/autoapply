@@ -61,18 +61,19 @@ This project uses the Auth0 Token Vault and My Account API for secure connection
 
 10. **Enable Refresh Token Rotation** (Recommended):
     - In your Auth0 App Settings, find the **Refresh Token Expiration** section:
-        - Toggle **Set Idle Refresh Token Lifetime** to `Enabled` and set it to `1209600` (14 days).
-        - Toggle **Set Maximum Refresh Token Lifetime** to `Enabled` and set it to `2592000` (30 days).
+      - Toggle **Set Idle Refresh Token Lifetime** to `Enabled` and set it to `1209600` (14 days).
+      - Toggle **Set Maximum Refresh Token Lifetime** to `Enabled` and set it to `2592000` (30 days).
     - Find the **Refresh Token Rotation** section:
-        - Toggle **Rotation** to `Enabled`.
-        - Set **Rotation Overlap Period** to `60` seconds.
+      - Toggle **Rotation** to `Enabled`.
+      - Set **Rotation Overlap Period** to `60` seconds.
     - Our system in `convex/tokenVault.ts` handles this rotation automatically to ensure continuous background service.
 
 11. **Publish Google OAuth App**:
-   - Go to [Google Cloud Console → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
-   - Click **"Publish App"** to allow any Google user to authorize
-   - While in Testing mode, only manually-added test users can complete the Google consent flow
-   - If requesting sensitive scopes (Gmail), Google may require a verification review — until verified, users will see an "unverified app" warning they can click through
+
+- Go to [Google Cloud Console → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
+- Click **"Publish App"** to allow any Google user to authorize
+- While in Testing mode, only manually-added test users can complete the Google consent flow
+- If requesting sensitive scopes (Gmail), Google may require a verification review — until verified, users will see an "unverified app" warning they can click through
 
 ### Environment Variables (`.env.local`)
 
@@ -220,6 +221,7 @@ Without this, Google access tokens expire after ~1 hour and background operation
    - Set it to **Disabled** (or ensure it's not enabled)
 
 3. **Set the Convex env vars** (same values as in `.env.local`):
+
    ```bash
    npx convex env set AUTH0_CLIENT_ID <your-client-id>
    npx convex env set AUTH0_CLIENT_SECRET <your-client-secret>
@@ -236,16 +238,30 @@ Without this, Google access tokens expire after ~1 hour and background operation
 
 ---
 
-## Architecture Decisions & Security
+## 🏗️ Architecture & Security Patterns
 
-### Storing Auth0 Refresh Tokens (Encrypted)
+AutoApply is designed as a **Production-Aware Agentic System**, fulfilling the _Authorized to Act_ Hackathon's requirements by **leveraging** the Auth0 for AI Agents platform:
 
-Unlike standard web applications that only perform actions during an active user session, AutoApply features **autonomous background agents**:
+### 1. Asynchronous Authorization (Async Auth)
 
-1. **Telegram Bot**: Users can apply to jobs directly from Telegram. The bot runs as a Convex Action, far removed from the user's Auth0 browser session.
-2. **Inbox Monitor (Cron)**: A background job checks for recruiter replies every 5 minutes.
+The app implements **Decoupled User Consent** via Telegram. This allows the backend agent to initiate a high-stakes action (like an application send) and seek approval on a separate device (mobile phone) via the Telegram bot.
 
-To allow these background processes to act on a user's behalf (via Auth0 Token Vault), the backend must have a way to identify itself to Auth0. We store a **Master Key** (the long-lived Auth0 Refresh Token) in the Convex database to bridge this gap.
+- **Leveraging Auth0**: The core **Async Auth** engine is the **Auth0 Token Vault**. It handles the secure, backend-to-backend exchange of the user's stored, encrypted Refresh Token for a fresh Gmail Access Token.
+- **Why Telegram?**: While tools like **Auth0 Guardian** are excellent for "Yes/No" binary security checks, an AI Agent needs a **Rich Interaction Channel**. Telegram allows the user to **edit the cover letter draft** directly in the chat before finally providing authorization.
+
+### 2. Step-Up Authentication
+
+High-stakes transactions (sending an email via your real Gmail account) are protected by a mandatory **Step-Up Authentication** check.
+
+- **The Guard**: The app offloads this to Auth0's session management. The `/api/send-application` route validates the `iat` (Issued At) time of the user's session.
+- **The Enforcement**: If the session is too old, the app triggers an official Auth0 `prompt=login` flow, forcing the user to re-verify their identity before the high-stakes email send proceeds.
+
+### 3. Defense-in-Depth for Token Storage
+
+To satisfy the "Security Model" criteria, all persistent tokens required for background agents are protected with:
+
+- **Encryption at Rest**: AES-256-GCM using a server-side `ENCRYPTION_SECRET`.
+- **Automatic Rotation**: The system proactively catches and saves new Refresh Tokens returned by **Auth0's Refresh Token Rotation** during background exchanges.
 
 **Why not just use Auth0 + Convex Session Auth?**
 Even if Convex is configured to recognize your Auth0 `ID Token` natively, that token is short-lived (usually 1 hour). More importantly, it is only available when a user is actively sending a request from their browser. Processes like **Telegram Webhooks** and **Background Crons** do not have access to your browser's Auth0 session.
@@ -254,8 +270,16 @@ Even if Convex is configured to recognize your Auth0 `ID Token` natively, that t
 Removing storage entirely would mean the Telegram bot and Cron jobs could never obtain a fresh Google Access Token once the initial ephemeral login session expired. This would transform AutoApply from an autonomous agent into a simple web-form.
 
 ### Defense in Depth
+
 To mitigate the risk of storing these "Master Keys":
+
 - **Encryption at Rest**: Every Auth0 Refresh Token is encrypted using **AES-256-GCM** before being saved to Convex.
 - **Environment Isolation**: The decryption key (`ENCRYPTION_SECRET`) is never stored in the database; it only exists as a server-side environment variable.
 - **Scope Limitation**: The tokens only grant the specific permissions (`gmail.send`, etc.) authorized by the user, not full account access.
 - **Automatic Rotation Handling**: Many modern OAuth 2.0 implementations (including Auth0) use **Refresh Token Rotation**. Our system in `convex/tokenVault.ts` is designed to capture, re-encrypt, and save any new refresh tokens issued during a background exchange, ensuring continuous service without user intervention.
+
+===
+
+Alternatives exist (like only using Auth0 Token Vault server-side without storing anything yourself), but they'd require the user to have an active session for every action — which breaks your Telegram bot and cron job use cases.
+
+So yes, it's fine for your architecture. Just make sure your encryption key is strong and rotated if ever compromised.

@@ -57,7 +57,7 @@ export async function getGmailTokenViaTokenVault(
     body: JSON.stringify({
       client_id: clientId,
       client_secret: clientSecret,
-      subject_token: decrypt(refreshToken),
+      subject_token: await decrypt(refreshToken),
       grant_type:
         "urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token",
       subject_token_type: "urn:ietf:params:oauth:token-type:refresh_token",
@@ -69,6 +69,7 @@ export async function getGmailTokenViaTokenVault(
 
   if (!res.ok) {
     const err = await res.text()
+    console.error("[TokenVault] exchange failed:", res.status, err)
     const isReauth = res.status === 401 || res.status === 403
     throw new TokenVaultError(
       `Token Vault exchange failed (${res.status}): ${err}`,
@@ -85,9 +86,10 @@ export async function getGmailTokenViaTokenVault(
     try {
       await ctx.runMutation(internal.userTokens.upsertRefreshToken, {
         userId,
-        auth0RefreshToken: encrypt(data.refresh_token),
+        auth0RefreshToken: await encrypt(data.refresh_token),
       })
     } catch (err) {
+
       console.error("[TokenVault] Failed to save rotated refresh token:", err)
       // We don't throw here — we already have the access_token, 
       // but next time will fail if the old one was invalidated.

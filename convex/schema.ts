@@ -20,6 +20,8 @@ export default defineSchema({
     followUpSentAt: v.optional(v.number()),
     emailSentAt: v.optional(v.number()),
     openCount: v.optional(v.number()),
+    schedulingLink: v.optional(v.string()),
+    proposedTimes: v.optional(v.array(v.string())),
     source: v.optional(v.union(v.literal("web"), v.literal("telegram"))),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),

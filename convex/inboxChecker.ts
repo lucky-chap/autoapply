@@ -219,35 +219,37 @@ export const checkAllInboxes = internalAction({
         )
         if (!bodyText) continue
 
-        const classifyPrompt = `You are classifying a recruiter's email reply to a job application.
+        const classifyPrompt = `You are a highly precise email classifier for a job application agent. 
 
 The candidate applied for the role of "${app.role}" at "${app.company}".
 
 EMAIL REPLY:
-${bodyText.slice(0, 2000)}
+${bodyText.slice(0, 3000)}
 
-Return a JSON object with three fields:
+Return a JSON object with these EXACT fields:
 1. "status" — EXACTLY ONE of: "Replied", "Interview", "Offer", "Rejected"
-   - "Replied" — general acknowledgement, interest, or questions
-   - "Interview" — scheduling an interview or requesting availability
-   - "Offer" — extending a job offer
-   - "Rejected" — rejection or position filled
-2. "summary" — A 1-2 sentence plain text summary of what the reply says, so the candidate knows what it's about without reading the full email
-3. "actionNeeded" — boolean. true if the candidate needs to respond or take action (e.g. reply to a question, schedule an interview, negotiate an offer). false if informational only (e.g. rejection, auto-acknowledgement like "we received your application", or a confirmation that needs no reply).
-   Rules:
-   - "Rejected" → always false
-   - "Interview" → always true
-   - "Offer" → always true
-   - "Replied" → true if the recruiter is asking a question or requesting something; false if it's just an acknowledgement or auto-reply
-4. "mentionedSalary" — If the email mentions a specific salary or compensation number, extract it as a number (annual amount). If no salary is mentioned, set to null.
+   - "Interview" — IF the email asks to schedule a call, interview, or availability.
+   - "Offer" — IF the email extends a formal or informal job offer.
+   - "Rejected" — IF they are not moving forward.
+   - "Replied" — Any other general communication.
+2. "summary" — A 1-2 sentence plain text summary of the recruiter's message.
+3. "actionNeeded" — boolean. true if the candidate needs to respond (e.g. schedule, answer a question).
+4. "mentionedSalary" — Extract any annual salary number found. null if none.
+5. "schedulingLink" — EXTRACT ANY URL for scheduling (Calendly, HubSpot, etc.). EXTRACT THE FULL URL. null if none.
+6. "proposedTimes" — EXTRACT SPECIFIC dates/times mentioned for an interview as an array of strings. [] if none.
 
-Return ONLY the JSON object, no markdown, no explanation.`
+CRITICAL: Look very carefully for links and times. If there is a "Schedule an interview" button or link, extract it.
+Return ONLY the JSON object.`
 
         const classificationRaw = await callGLM(classifyPrompt, glmApiKey)
+        console.log(`[inboxChecker] AI Raw Output for ${app.company}:`, classificationRaw)
+
         let status = ""
         let replySummary = ""
         let actionNeeded = true
         let mentionedSalary: number | null = null
+        let schedulingLink: string | null = null
+        let proposedTimes: string[] = []
         try {
           const cleaned = classificationRaw
             .replace(/^```(?:json)?\s*/i, "")
@@ -260,9 +262,13 @@ Return ONLY the JSON object, no markdown, no explanation.`
             replySummary = String(parsed.summary || "").trim()
             actionNeeded = parsed.actionNeeded !== false
             mentionedSalary = typeof parsed.mentionedSalary === "number" ? parsed.mentionedSalary : null
+            schedulingLink = parsed.schedulingLink || null
+            proposedTimes = Array.isArray(parsed.proposedTimes) ? parsed.proposedTimes : []
+
+            console.log(`[inboxChecker] Parsed AI fields for ${app.company}:`, { status, schedulingLink, proposedTimesCount: proposedTimes.length })
           }
-        } catch {
-          // Fallback: treat raw output as just the status
+        } catch (err) {
+          console.error("[inboxChecker] JSON parse failed:", err)
           status = classificationRaw.trim().replace(/['"]/g, "")
         }
 
@@ -287,6 +293,8 @@ Return ONLY the JSON object, no markdown, no explanation.`
             id: app._id,
             status: statusChanged ? matchedStatus : app.status,
             lastCheckedGmailMsgId: reply.gmailMsgId,
+            schedulingLink: schedulingLink || undefined,
+            proposedTimes: proposedTimes.length > 0 ? proposedTimes : undefined,
           }
         )
         if (statusChanged) totalUpdated++
@@ -311,6 +319,16 @@ Return ONLY the JSON object, no markdown, no explanation.`
             ? "\n\n👉 <b>Action needed</b> — check your email and respond."
             : "\n\n<i>No action needed on your part.</i>"
 
+          // Scheduling info
+          // Show scheduling info if present, regardless of AI status classification
+          let schedulingAlert = ""
+          if (schedulingLink) {
+            schedulingAlert = `\n\n📅 <b>Schedule here:</b> ${schedulingLink}`
+          }
+          if (proposedTimes.length > 0) {
+            schedulingAlert += `\n\n⏰ <b>Proposed times:</b>\n- ${proposedTimes.join("\n- ")}`
+          }
+
           // Salary alert for offers
           let salaryAlert = ""
           if (matchedStatus === "Offer" && mentionedSalary !== null) {
@@ -323,9 +341,19 @@ Return ONLY the JSON object, no markdown, no explanation.`
             }
           }
 
+          const replyMarkup =
+            (matchedStatus === "Interview" || (proposedTimes && proposedTimes.length > 0) || schedulingLink)
+              ? {
+                  inline_keyboard: [
+                    [{ text: "📅 Check My Calendar", callback_data: "calendar_check" }],
+                  ],
+                }
+              : undefined
+
           await ctx.runAction(internal.telegram.sendNotification, {
             chatId: telegramLink.telegramChatId,
-            text: `${emoji} <b>${app.company}</b> update for <b>${app.role}</b>\n\n${statusLine}${summaryLine}${salaryAlert}${actionLine}`,
+            text: `${emoji} <b>${app.company}</b> update for <b>${app.role}</b>\n\n${statusLine}${summaryLine}${salaryAlert}${schedulingAlert}${actionLine}`,
+            replyMarkup,
           })
         }
       }

@@ -11,6 +11,7 @@
 import type * as aiActions from "../aiActions.js";
 import type * as applications from "../applications.js";
 import type * as auth0 from "../auth0.js";
+import type * as calendar from "../calendar.js";
 import type * as crons from "../crons.js";
 import type * as followUp from "../followUp.js";
 import type * as http from "../http.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   aiActions: typeof aiActions;
   applications: typeof applications;
   auth0: typeof auth0;
+  calendar: typeof calendar;
   crons: typeof crons;
   followUp: typeof followUp;
   http: typeof http;

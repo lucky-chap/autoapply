@@ -6,7 +6,7 @@ import {
   AlertCircle,
   ExternalLink,
   PlusCircle,
-  Unplug,
+  RefreshCw,
 } from "lucide-react"
 
 // These are the scopes we want to verify are present
@@ -25,6 +25,13 @@ const REQUIRED_SCOPES = [
     description:
       "Allows the agent to check for recruiter replies in your inbox.",
   },
+  {
+    id: "calendar.events",
+    name: "Google Calendar — Events",
+    scope: "https://www.googleapis.com/auth/calendar.events",
+    description:
+      "Allows the agent to check for scheduling conflicts and create interview events.",
+  },
 ]
 
 export default async function PermissionsPage() {
@@ -42,8 +49,8 @@ export default async function PermissionsPage() {
     })) as { token: string; expiresAt: number; scope?: string }
     isConnected = true
     grantedScopes = connectionToken.scope?.split(" ") || []
-  } catch {
-    // Not connected or token exchange failed
+  } catch (err) {
+    console.error("[permissions] getAccessTokenForConnection failed:", err)
   }
 
   // Check which of our required scopes are actually granted
@@ -57,6 +64,7 @@ export default async function PermissionsPage() {
   const scopes = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/calendar.events",
   ]
   const scopeParams = scopes
     .map((s) => `scopes=${encodeURIComponent(s)}`)
@@ -97,10 +105,13 @@ export default async function PermissionsPage() {
                   Connect Google
                 </a>
               ) : (
-                <button className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-500 transition-colors hover:bg-red-50">
-                  <Unplug className="h-3.5 w-3.5" />
-                  Disconnect Google
-                </button>
+                <a
+                  href={connectUrl}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Re-authorize
+                </a>
               )}
             </div>
           </div>
@@ -138,6 +149,15 @@ export default async function PermissionsPage() {
                     ></span>
                     {item.status}
                   </span>
+                  {isConnected && !item.isGranted && (
+                    <a
+                      href={connectUrl}
+                      className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90"
+                    >
+                      <PlusCircle className="h-3.5 w-3.5" />
+                      Connect
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
@@ -146,13 +166,13 @@ export default async function PermissionsPage() {
           {!isConnected && (
             <div className="border-t border-gray-50 bg-gray-50/30 p-8 text-center">
               <p className="text-sm text-gray-500">
-                You haven't connected your Google account yet.
+                Google services are not connected yet. Grant access so AutoApply can send emails and check your calendar.
               </p>
               <a
                 href={connectUrl}
                 className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
               >
-                Grant Gmail Access
+                Connect Google Services
               </a>
             </div>
           )}
@@ -166,8 +186,8 @@ export default async function PermissionsPage() {
             </h3>
             <p className="text-sm leading-relaxed text-amber-800">
               AutoApply never sees your Gmail password. We only hold short-lived
-              "permission slips" (OAuth tokens). If you revoke access here, the
-              agent is immediately locked out of those actions.
+              "permission slips" (OAuth tokens). You can revoke access at any
+              time from your Google Account security settings.
             </p>
             <a
               href="https://auth0.com/docs/secure/tokens/token-vault"

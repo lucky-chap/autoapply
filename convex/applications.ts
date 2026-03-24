@@ -212,11 +212,15 @@ export const internalUpdateStatus = internalMutation({
       v.literal("Rejected")
     ),
     lastCheckedGmailMsgId: v.optional(v.string()),
+    schedulingLink: v.optional(v.string()),
+    proposedTimes: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { id, status, lastCheckedGmailMsgId }) => {
+  handler: async (ctx, { id, status, lastCheckedGmailMsgId, schedulingLink, proposedTimes }) => {
     await ctx.db.patch(id, {
       status,
       ...(lastCheckedGmailMsgId !== undefined ? { lastCheckedGmailMsgId } : {}),
+      ...(schedulingLink !== undefined ? { schedulingLink } : {}),
+      ...(proposedTimes !== undefined ? { proposedTimes } : {}),
     })
   },
 })

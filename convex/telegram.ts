@@ -59,11 +59,11 @@ async function editMessageReplyMarkup(
 async function answerCallbackQuery(
   botToken: string,
   callbackQueryId: string,
-  text: string
+  text?: string
 ) {
   return sendTelegram(botToken, "answerCallbackQuery", {
     callback_query_id: callbackQueryId,
-    text,
+    ...(text ? { text } : {}),
   })
 }
 
@@ -989,11 +989,82 @@ async function handleCallbackQuery(
         "🔄 <b>Retrying...</b> Sending your application again."
       )
     } catch (err) {
-      await answerCallbackQuery(
-        botToken,
-        callbackQuery.id,
-        `Error: ${String(err)}`
+      await answerCallbackQuery(botToken, callbackQuery.id, `Error: ${String(err)}`)
+    }
+  } else if (data === "calendar_check") {
+    try {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
       )
+      if (!link) {
+        await answerCallbackQuery(botToken, callbackQuery.id, "Account not linked.")
+        return
+      }
+
+      // 1. Answer immediately (no text) to stop the loading spinner
+      await answerCallbackQuery(botToken, callbackQuery.id)
+
+      // 2. Inform the user we are checking
+      await sendMessage(botToken, chatId, "⏳ <b>Checking your calendar...</b>")
+
+      // Check conflicts for next 48 hours
+      const now = new Date()
+      const end = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+
+      const events = await ctx.runAction(internal.calendar.getCalendarConflicts, {
+        userId: link.userId,
+        startTime: now.toISOString(),
+        endTime: end.toISOString(),
+      })
+
+      if (events.length === 0) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "📅 <b>Your calendar is clear</b> for the next 48 hours!"
+        )
+      } else {
+        const eventLines = events.map((e: any) => {
+          const start = new Date(e.start.dateTime || e.start.date)
+          const timeStr = start.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          })
+          const dateStr = start.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          })
+          return `• <b>${escapeHtml(e.summary)}</b>\n  ${dateStr} @ ${timeStr}`
+        })
+        await sendMessage(
+          botToken,
+          chatId,
+          `📅 <b>Upcoming Events (Next 48h):</b>\n\n${eventLines.join("\n\n")}`
+        )
+      }
+    } catch (err) {
+      console.error("[telegram] calendar_check failed:", err)
+      if (String(err).includes("MISSING_CALENDAR_SCOPE")) {
+        const permissionsUrl =
+          (process.env.NEXT_PUBLIC_SITE_URL ||
+            process.env.NEXT_PUBLIC_CONVEX_SITE_URL ||
+            "") + "/permissions"
+        await sendMessage(
+          botToken,
+          chatId,
+          `🔒 <b>Calendar access not enabled</b>\n\n` +
+            `To use calendar features, you need to grant Google Calendar permission.\n\n` +
+            `Visit your permissions page to connect it:\n${permissionsUrl}`
+        )
+      } else {
+        await sendMessage(
+          botToken,
+          chatId,
+          `❌ <b>Failed to check calendar</b>\n\n${escapeHtml(String(err))}`
+        )
+      }
     }
   }
 }
@@ -1178,10 +1249,11 @@ export const sendNotification = internalAction({
   args: {
     chatId: v.string(),
     text: v.string(),
+    replyMarkup: v.optional(v.any()), // InlineKeyboardMarkup
   },
-  handler: async (_ctx, { chatId, text }) => {
+  handler: async (_ctx, { chatId, text, replyMarkup }) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN!
-    await sendMessage(botToken, chatId, text)
+    await sendMessage(botToken, chatId, text, replyMarkup)
   },
 })
 
