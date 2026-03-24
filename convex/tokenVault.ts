@@ -8,14 +8,10 @@
  *   AUTH0_DOMAIN
  *   AUTH0_CLIENT_ID     — Regular web app client ID (same app as the frontend)
  *   AUTH0_CLIENT_SECRET — Regular web app client secret
- *   AUTH0_M2M_CLIENT_ID     — M2M app for Management API lookups
- *   AUTH0_M2M_CLIENT_SECRET
  */
 
 import { internal } from "./_generated/api"
 import { ActionCtx } from "./_generated/server"
-
-// ── Token Vault: refresh token → federated Google access token ──
 
 export async function getGmailTokenViaTokenVault(
   ctx: ActionCtx,
@@ -67,45 +63,4 @@ export async function getGmailTokenViaTokenVault(
 
   const data = await res.json()
   return data.access_token
-}
-
-// ── Helper: get Auth0 Management API token (for user info lookups) ──
-
-export async function getAuth0ManagementToken(): Promise<string> {
-  const domain = process.env.AUTH0_DOMAIN!
-  const clientId = process.env.AUTH0_M2M_CLIENT_ID!
-  const clientSecret = process.env.AUTH0_M2M_CLIENT_SECRET!
-
-  const res = await fetch(`https://${domain}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-      audience: `https://${domain}/api/v2/`,
-    }),
-  })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Auth0 M2M token error (${res.status}): ${err}`)
-  }
-  const data = await res.json()
-  return data.access_token
-}
-
-// ── Helper: get user email/name from Auth0 ──
-
-export async function getUserEmail(
-  managementToken: string,
-  userId: string
-): Promise<{ name: string; email: string } | null> {
-  const domain = process.env.AUTH0_DOMAIN!
-  const res = await fetch(
-    `https://${domain}/api/v2/users/${encodeURIComponent(userId)}?fields=name,email`,
-    { headers: { Authorization: `Bearer ${managementToken}` } }
-  )
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.name && data.email ? { name: data.name, email: data.email } : null
 }

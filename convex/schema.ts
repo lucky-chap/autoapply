@@ -16,6 +16,8 @@ export default defineSchema({
     coverLetter: v.string(),
     recipientEmail: v.string(),
     gmailThreadId: v.optional(v.string()),
+    lastCheckedGmailMsgId: v.optional(v.string()),
+    followUpSentAt: v.optional(v.number()),
     emailSentAt: v.optional(v.number()),
     openCount: v.optional(v.number()),
     source: v.optional(v.union(v.literal("web"), v.literal("telegram"))),
@@ -109,6 +111,28 @@ export default defineSchema({
     jobDescription: v.string(),
     company: v.string(),
     role: v.string(),
+    createdAt: v.number(),
+  }).index("by_telegramChatId", ["telegramChatId"]),
+
+  messageBuffer: defineTable({
+    telegramChatId: v.string(),
+    parts: v.array(v.string()),
+    lastMessageAt: v.number(),
+  }).index("by_telegramChatId", ["telegramChatId"]),
+
+  jobInputMode: defineTable({
+    telegramChatId: v.string(),
+    createdAt: v.number(),
+  }).index("by_telegramChatId", ["telegramChatId"]),
+
+  pendingSalaryReview: defineTable({
+    telegramChatId: v.string(),
+    userId: v.string(),
+    jobDescription: v.string(),
+    company: v.string(),
+    role: v.string(),
+    email: v.string(),
+    salary: v.number(),
     createdAt: v.number(),
   }).index("by_telegramChatId", ["telegramChatId"]),
 })

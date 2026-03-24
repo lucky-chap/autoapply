@@ -37,6 +37,8 @@ export async function extractJobInfoHelper(jobDescription: string): Promise<{
   company: string
   role: string
   email: string
+  salary: number | null
+  multipleDetected: boolean
 }> {
   const apiKey = process.env.GLM_API_KEY!
 
@@ -50,14 +52,17 @@ Extract the following fields from the job posting:
 - "company": the company name
 - "role": the job title / role name
 - "email": a contact or application email address (if present)
+- "salary": the annual salary as a number in USD (if a range is given, use the midpoint; if hourly, multiply by 2080; if monthly, multiply by 12). null if no salary is mentioned.
+- "multipleJobs": true if the text contains more than one distinct job posting (e.g. multiple different companies, multiple unrelated roles at different companies, or clearly separate job listings). false if it's a single job posting (even if lengthy).
 
 Return ONLY a JSON object like:
-{"company": "Stripe", "role": "Senior Frontend Engineer", "email": "jobs@stripe.com"}
+{"company": "Stripe", "role": "Senior Frontend Engineer", "email": "jobs@stripe.com", "salary": 180000, "multipleJobs": false}
 
 Rules:
 - If you cannot find the company name, set it to ""
 - If you cannot find the role title, set it to ""
 - If no email is mentioned, set email to ""
+- If no salary/compensation is mentioned, set salary to null
 - Return ONLY the JSON object, no markdown, no explanation`,
     apiKey,
   )
@@ -68,16 +73,18 @@ Rules:
       .replace(/\s*```\s*$/, "")
       .trim()
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return { company: "", role: "", email: "" }
+    if (!jsonMatch) return { company: "", role: "", email: "", salary: null, multipleDetected: false }
 
     const raw = JSON.parse(jsonMatch[0])
     return {
       company: String(raw.company || ""),
       role: String(raw.role || raw.title || raw.position || ""),
       email: String(raw.email || raw.contact_email || ""),
+      salary: typeof raw.salary === "number" ? raw.salary : null,
+      multipleDetected: raw.multipleJobs === true,
     }
   } catch {
-    return { company: "", role: "", email: "" }
+    return { company: "", role: "", email: "", salary: null, multipleDetected: false }
   }
 }
 
@@ -97,8 +104,17 @@ export async function generateCoverLetterHelper(
     throw new Error("No resume profile found. Upload your CV first.")
   }
 
+  const prefs = await ctx.runQuery(internal.preferences.getByUserInternal, {
+    userId,
+  })
+
   // Extract candidate name from profile rawText (first line is usually the name)
   const candidateName = profile.rawText.split("\n")[0]?.trim() || "The Candidate"
+
+  const prefsSection = [
+    prefs?.targetRoles?.length ? `Target roles: ${prefs.targetRoles.join(", ")}` : "",
+    prefs?.targetLocations?.length ? `Preferred locations: ${prefs.targetLocations.join(", ")}` : "",
+  ].filter(Boolean).join("\n")
 
   const prompt = `You are writing a job application cover letter on behalf of a candidate.
 
@@ -108,6 +124,7 @@ Skills: ${profile.skills.join(", ")}
 Experience: ${JSON.stringify(profile.experience)}
 Writing tone: ${profile.tone}
 Resume summary: ${profile.rawText}
+${prefsSection ? `\nCANDIDATE PREFERENCES:\n${prefsSection}` : ""}
 
 COMPANY: ${company}
 ROLE: ${role}
@@ -123,11 +140,22 @@ Write a concise, personalised cover letter that:
 5. References specific details from the posting
 6. Sounds like a real person, not a template
 7. Is 3 short paragraphs max
-8. Ends with a professional sign-off like "Best regards," followed by ONLY the candidate's name "${candidateName}" on the next line — do NOT add a title, phone number, email, or any other information after the name
+8. Ends with EXACTLY these two lines and NOTHING else after them:
+Best regards,
+${candidateName}
+
+CRITICAL: The letter MUST end immediately after the candidate's name "${candidateName}". Do NOT add any bio, summary, description, title, phone number, email, LinkedIn, or ANY other text after the name. The very last line of your output must be "${candidateName}" with nothing following it.
 
 IMPORTANT: Return ONLY plain text. Do NOT use any markdown formatting — no bold (**), no italics (*), no headers (#), no bullet points. Just normal sentences and paragraphs separated by blank lines.`
 
-  return await callGLM(prompt, apiKey)
+  const raw = await callGLM(prompt, apiKey)
+
+  // Trim anything after the candidate's name in the sign-off
+  const nameIndex = raw.lastIndexOf(candidateName)
+  if (nameIndex !== -1) {
+    return raw.slice(0, nameIndex + candidateName.length).trimEnd()
+  }
+  return raw
 }
 
 // Convex action wrappers (for scheduling / calling from other contexts)

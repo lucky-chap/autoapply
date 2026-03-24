@@ -3,30 +3,29 @@ import { internal } from "./_generated/api"
 import { v } from "convex/values"
 import { Id } from "./_generated/dataModel"
 import { extractJobInfoHelper, generateCoverLetterHelper } from "./aiActions"
-import {
-  getGmailTokenViaTokenVault,
-  getAuth0ManagementToken,
-  getUserEmail,
-} from "./tokenVault"
+import { getGmailTokenViaTokenVault } from "./tokenVault"
+import { getAuth0ManagementToken, getUserEmail } from "./auth0"
 
 // ── Telegram Bot API helpers ──
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
 
 async function sendTelegram(
   botToken: string,
   method: string,
   body: Record<string, unknown>
 ): Promise<unknown> {
-  const res = await fetch(
-    `https://api.telegram.org/bot${botToken}/${method}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }
-  )
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
   if (!res.ok) {
     const err = await res.text()
     console.error(`[telegram] ${method} failed: ${err}`)
+    throw new Error(`Telegram ${method} failed: ${err}`)
   }
   return res.json()
 }
@@ -40,7 +39,7 @@ async function sendMessage(
   return sendTelegram(botToken, "sendMessage", {
     chat_id: chatId,
     text,
-    parse_mode: "Markdown",
+    parse_mode: "HTML",
     ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   })
 }
@@ -57,7 +56,11 @@ async function editMessageReplyMarkup(
   })
 }
 
-async function answerCallbackQuery(botToken: string, callbackQueryId: string, text: string) {
+async function answerCallbackQuery(
+  botToken: string,
+  callbackQueryId: string,
+  text: string
+) {
   return sendTelegram(botToken, "answerCallbackQuery", {
     callback_query_id: callbackQueryId,
     text,
@@ -68,12 +71,17 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string, te
 
 function toBase64(str: string): string {
   return btoa(
-    Array.from(new TextEncoder().encode(str), (b) => String.fromCharCode(b)).join("")
+    Array.from(new TextEncoder().encode(str), (b) =>
+      String.fromCharCode(b)
+    ).join("")
   )
 }
 
 function toBase64Url(str: string): string {
-  return toBase64(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+  return toBase64(str)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
 }
 
 // ── Email encoding (same logic as lib/gmail.ts) ──
@@ -161,35 +169,42 @@ async function createPendingActionAndPreview(
     coverLetter: string
   }
 ) {
-  const pendingActionId = await ctx.runMutation(internal.pendingActions.create, {
-    userId,
-    actionType: "send_email" as const,
-    payload,
-    telegramChatId: chatId,
-    source: "telegram" as const,
-  })
+  const pendingActionId = await ctx.runMutation(
+    internal.pendingActions.create,
+    {
+      userId,
+      actionType: "send_email" as const,
+      payload,
+      telegramChatId: chatId,
+      source: "telegram" as const,
+    }
+  )
 
-  const preview = payload.coverLetter.length > 500
-    ? payload.coverLetter.slice(0, 500) + "..."
-    : payload.coverLetter
+  const preview =
+    payload.coverLetter.length > 500
+      ? payload.coverLetter.slice(0, 500) + "..."
+      : payload.coverLetter
 
-  const result = await sendMessage(
+  const result = (await sendMessage(
     botToken,
     chatId,
-    `📧 *Ready to send application*\n\n` +
-      `*Company:* ${payload.company}\n` +
-      `*Role:* ${payload.role}\n` +
-      `*To:* ${payload.to}\n\n` +
-      `*Cover Letter Preview:*\n${preview}`,
+    `📧 <b>Ready to send application</b>\n\n` +
+      `<b>Company:</b> ${escapeHtml(payload.company)}\n` +
+      `<b>Role:</b> ${escapeHtml(payload.role)}\n` +
+      `<b>To:</b> ${escapeHtml(payload.to)}\n\n` +
+      `<b>Cover Letter Preview:</b>\n${escapeHtml(preview)}`,
     {
       inline_keyboard: [
         [
-          { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
+          {
+            text: "✅ Approve & Send",
+            callback_data: `approve:${pendingActionId}`,
+          },
           { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
         ],
       ],
     }
-  ) as { result?: { message_id?: number } }
+  )) as { result?: { message_id?: number } }
 
   if (result?.result?.message_id) {
     await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
@@ -205,7 +220,10 @@ export const processUpdate = internalAction({
   args: { update: v.string() },
   handler: async (ctx, { update }) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN!
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_CONVEX_SITE_URL || ""
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_CONVEX_SITE_URL ||
+      ""
     const parsed = JSON.parse(update)
 
     // Deduplicate — Telegram may deliver the same update multiple times
@@ -239,33 +257,60 @@ export const processUpdate = internalAction({
         internal.telegramLinks.getLinkByTelegramChatId,
         { telegramChatId: chatId }
       )
-      let greeting = "👋 *Welcome to AutoApply Bot!*\n\n"
+      let greeting = "👋 <b>Welcome to AutoApply Bot!</b>\n\n"
       if (existingLink) {
         try {
           const mgmtToken = await getAuth0ManagementToken()
           const userInfo = await getUserEmail(mgmtToken, existingLink.userId)
           if (userInfo) {
-            greeting += `✅ Logged in as *${userInfo.name}* (${userInfo.email})\n\n`
+            greeting += `✅ Logged in as <b>${escapeHtml(userInfo.name)}</b> (${escapeHtml(userInfo.email)})\n\n`
           }
-        } catch { /* non-critical */ }
+        } catch {
+          /* non-critical */
+        }
       }
       await sendMessage(
         botToken,
         chatId,
         greeting +
           "I can help you apply to jobs directly from Telegram.\n\n" +
-          "1️⃣ First, link your account: /link\n" +
-          "2️⃣ Then send me a job description and I'll generate a cover letter\n" +
+          "1️⃣ First, link your account: /link (you can skip this step if you are already logged in)\n" +
+          "2️⃣ Use /job then paste a job description\n" +
           "3️⃣ Approve the send with one tap\n\n" +
           "Commands:\n" +
           "/link — Link your AutoApply account\n" +
-          "/status — Check your recent applications"
+          "/unlink — Unlink your account\n" +
+          "/job — Paste a job description\n" +
+          "/status — Check your recent applications\n" +
+          "/salary — Set minimum salary alert"
       )
       return
     }
 
     // Command: /link
     if (text === "/link") {
+      const existingLink = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (existingLink) {
+        let emailInfo = ""
+        try {
+          const mgmtToken = await getAuth0ManagementToken()
+          const userInfo = await getUserEmail(mgmtToken, existingLink.userId)
+          if (userInfo) emailInfo = ` as <b>${escapeHtml(userInfo.email)}</b>`
+        } catch {
+          /* non-critical */
+        }
+        await sendMessage(
+          botToken,
+          chatId,
+          `✅ Your account is already linked${emailInfo}.\n\n` +
+            "To re-link a different account, use /unlink first."
+        )
+        return
+      }
+
       const code = generateCode()
       await ctx.runMutation(internal.telegramLinks.createLinkingCode, {
         code,
@@ -275,9 +320,116 @@ export const processUpdate = internalAction({
       await sendMessage(
         botToken,
         chatId,
-        "🔗 *Link your AutoApply account*\n\n" +
+        "🔗 <b>Link your AutoApply account</b>\n\n" +
           `Open this link while logged in to AutoApply:\n${linkUrl}\n\n` +
-          "_This link expires in 15 minutes._"
+          "<i>This link expires in 15 minutes.</i>"
+      )
+      return
+    }
+
+    // Command: /unlink
+    if (text === "/unlink") {
+      const existingLink = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!existingLink) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ No account is linked to this chat. Use /link to connect one."
+        )
+        return
+      }
+      await ctx.runMutation(internal.telegramLinks.internalUnlinkByChatId, {
+        telegramChatId: chatId,
+      })
+      await sendMessage(
+        botToken,
+        chatId,
+        "🔓 Account unlinked. Use /link to connect a different account."
+      )
+      return
+    }
+
+    // Command: /salary
+    if (text.startsWith("/salary")) {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!link) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Account not linked. Use /link first."
+        )
+        return
+      }
+
+      const arg = text.replace("/salary", "").trim()
+      if (!arg) {
+        // Show current salary setting
+        const prefs = await ctx.runQuery(
+          internal.preferences.getByUserInternal,
+          { userId: link.userId }
+        )
+        if (prefs?.minSalary) {
+          await sendMessage(
+            botToken,
+            chatId,
+            `💰 Your minimum salary is set to <b>$${prefs.minSalary.toLocaleString("en-US")}</b>.\n\n` +
+              "To change it: <code>/salary 120000</code>\nTo remove it: <code>/salary off</code>"
+          )
+        } else {
+          await sendMessage(
+            botToken,
+            chatId,
+            "💰 No minimum salary set. I'll process all jobs without salary warnings.\n\n" +
+              "To set one: <code>/salary 120000</code>"
+          )
+        }
+        return
+      }
+
+      if (arg.toLowerCase() === "off" || arg === "0") {
+        const prefs = await ctx.runQuery(
+          internal.preferences.getByUserInternal,
+          { userId: link.userId }
+        )
+        if (prefs) {
+          await ctx.runMutation(internal.preferences.internalUpdateMinSalary, {
+            userId: link.userId,
+            minSalary: undefined,
+          })
+        }
+        await sendMessage(
+          botToken,
+          chatId,
+          "💰 Minimum salary removed. I'll process all jobs without salary warnings."
+        )
+        return
+      }
+
+      const parsed = parseInt(arg.replace(/[$,]/g, ""), 10)
+      if (isNaN(parsed) || parsed < 0) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Please provide a valid number, e.g. <code>/salary 120000</code>"
+        )
+        return
+      }
+
+      await ctx.runMutation(internal.preferences.internalUpdateMinSalary, {
+        userId: link.userId,
+        minSalary: parsed,
+      })
+      await sendMessage(
+        botToken,
+        chatId,
+        `💰 Minimum salary set to <b>$${parsed.toLocaleString("en-US")}</b>.\n\n` +
+          "I'll warn you before applying to jobs that pay less than this."
       )
       return
     }
@@ -289,7 +441,11 @@ export const processUpdate = internalAction({
         { telegramChatId: chatId }
       )
       if (!link) {
-        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Account not linked. Use /link first."
+        )
         return
       }
 
@@ -299,7 +455,11 @@ export const processUpdate = internalAction({
       )
 
       if (recent.length === 0) {
-        await sendMessage(botToken, chatId, "📊 No applications yet. Send me a job description to get started!")
+        await sendMessage(
+          botToken,
+          chatId,
+          "📊 No applications yet. Send me a job description to get started!"
+        )
         return
       }
 
@@ -313,24 +473,53 @@ export const processUpdate = internalAction({
 
       const lines = recent.map((app) => {
         const emoji = statusEmoji[app.status ?? "Applied"] ?? "📤"
-        const date = new Date(app.emailSentAt ?? app.createdAt).toLocaleDateString("en-US", {
+        const date = new Date(
+          app.emailSentAt ?? app.createdAt
+        ).toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
         })
-        const opens = app.openCount ? ` · ${app.openCount} open${app.openCount > 1 ? "s" : ""}` : ""
-        return `${emoji} *${app.company}* — ${app.role}\n    ${app.status ?? "Applied"} · ${date}${opens}`
+        const opens = app.openCount
+          ? ` · ${app.openCount} open${app.openCount > 1 ? "s" : ""}`
+          : ""
+        return `${emoji} <b>${escapeHtml(app.company)}</b> — ${escapeHtml(app.role)}\n    ${app.status ?? "Applied"} · ${date}${opens}`
       })
 
       await sendMessage(
         botToken,
         chatId,
-        `📊 *Recent Applications*\n\n${lines.join("\n\n")}\n\n` +
+        `📊 <b>Recent Applications</b>\n\n${lines.join("\n\n")}\n\n` +
           `View all on the dashboard:\n${siteUrl}/dashboard`
       )
       return
     }
 
-    // Otherwise, treat as a job description (or email follow-up)
+    // Command: /job — enter job description mode
+    if (text === "/job") {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!link) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Your Telegram account is not linked yet.\n\nUse /link to connect your AutoApply account first."
+        )
+        return
+      }
+      await ctx.runMutation(internal.telegramLinks.setJobInputMode, {
+        telegramChatId: chatId,
+      })
+      await sendMessage(
+        botToken,
+        chatId,
+        "📋 <b>Ready for a job description!</b>\n\nPaste the job posting below and I'll process it."
+      )
+      return
+    }
+
+    // Non-command text — check if we're expecting input
     const link = await ctx.runQuery(
       internal.telegramLinks.getLinkByTelegramChatId,
       { telegramChatId: chatId }
@@ -356,7 +545,11 @@ export const processUpdate = internalAction({
         await ctx.runMutation(internal.telegramLinks.deletePendingEmailInput, {
           telegramChatId: chatId,
         })
-        await sendMessage(botToken, chatId, "⏳ Generating your cover letter...")
+        await sendMessage(
+          botToken,
+          chatId,
+          "⏳ Generating your cover letter..."
+        )
 
         let coverLetter: string
         try {
@@ -365,105 +558,281 @@ export const processUpdate = internalAction({
             pendingInput.jobDescription,
             pendingInput.company,
             pendingInput.role,
-            link.userId,
+            link.userId
           )
         } catch (err) {
-          await sendMessage(botToken, chatId, `❌ Failed to generate cover letter: ${String(err)}`)
+          await sendMessage(
+            botToken,
+            chatId,
+            `❌ Failed to generate cover letter: ${String(err)}`
+          )
           return
         }
 
         const email = emailMatch[0]
         const subject = `Application for ${pendingInput.role} at ${pendingInput.company}`
 
-        // Jump to the pending action creation (shared with normal flow below)
-        await createPendingActionAndPreview(ctx, botToken, chatId, link.userId, {
-          to: email,
-          subject,
-          body: coverLetter,
-          company: pendingInput.company,
-          role: pendingInput.role,
-          coverLetter,
-        })
+        await createPendingActionAndPreview(
+          ctx,
+          botToken,
+          chatId,
+          link.userId,
+          {
+            to: email,
+            subject,
+            body: coverLetter,
+            company: pendingInput.company,
+            role: pendingInput.role,
+            coverLetter,
+          }
+        )
         return
       } else {
-        // Not an email — clear the pending state and treat as a new job description
+        // Not an email — clear the pending state
         await ctx.runMutation(internal.telegramLinks.deletePendingEmailInput, {
           telegramChatId: chatId,
         })
       }
     }
 
-    await sendMessage(botToken, chatId, "⏳ Processing your job description...")
-
-    // Extract job info
-    let jobInfo: { company: string; role: string; email: string }
-    try {
-      jobInfo = await extractJobInfoHelper(text)
-    } catch (err) {
-      console.error("[telegram] extractJobInfo failed:", err)
-      await sendMessage(
-        botToken,
-        chatId,
-        `❌ Failed to process job description: ${String(err)}`
-      )
-      return
-    }
-
-    if (!jobInfo.company && !jobInfo.role) {
-      await sendMessage(
-        botToken,
-        chatId,
-        "❌ I couldn't extract job details from that text. Please send a full job description or posting."
-      )
-      return
-    }
-
-    if (!jobInfo.email) {
-      // Save state so the next message can provide the email
-      await ctx.runMutation(internal.telegramLinks.savePendingEmailInput, {
+    // Check if user is in job input mode
+    const jobMode = await ctx.runQuery(internal.telegramLinks.getJobInputMode, {
+      telegramChatId: chatId,
+    })
+    if (jobMode) {
+      // Clear the mode and buffer the job description
+      await ctx.runMutation(internal.telegramLinks.clearJobInputMode, {
         telegramChatId: chatId,
+      })
+      const { isFirst } = await ctx.runMutation(
+        internal.telegramLinks.appendToMessageBuffer,
+        { telegramChatId: chatId, text }
+      )
+      if (isFirst) {
+        await sendMessage(botToken, chatId, "⏳ Receiving your message...")
+        await ctx.scheduler.runAfter(
+          3000,
+          internal.telegram.processBufferedMessage,
+          {
+            telegramChatId: chatId,
+            userId: link.userId,
+          }
+        )
+      }
+      return
+    }
+
+    // No active mode — show help
+    await sendMessage(
+      botToken,
+      chatId,
+      "💡 Use a command to get started:\n\n" +
+        "/job — Paste a job description\n" +
+        "/status — Check recent applications\n" +
+        "/salary — Set minimum salary alert\n\n" +
+        "<i>Send /job first, then paste your job description.</i>"
+    )
+  },
+})
+
+// ── Process job description (shared by direct and buffered flows) ──
+
+async function processJobDescription(
+  ctx: ActionCtx,
+  botToken: string,
+  chatId: string,
+  userId: string,
+  text: string
+) {
+  await sendMessage(botToken, chatId, "⏳ Processing your job description...")
+
+  let jobInfo: {
+    company: string
+    role: string
+    email: string
+    salary: number | null
+    multipleDetected: boolean
+  }
+  try {
+    jobInfo = await extractJobInfoHelper(text)
+  } catch (err) {
+    console.error("[telegram] extractJobInfo failed:", err)
+    await sendMessage(
+      botToken,
+      chatId,
+      `❌ Failed to process job description: ${String(err)}`
+    )
+    return
+  }
+
+  if (jobInfo.multipleDetected) {
+    await sendMessage(
+      botToken,
+      chatId,
+      "⚠️ It looks like you pasted <b>multiple job postings</b> in one message.\n\n" +
+        "Please send them <b>one at a time</b> so I can process each correctly."
+    )
+    return
+  }
+
+  if (!jobInfo.company && !jobInfo.role) {
+    await sendMessage(
+      botToken,
+      chatId,
+      "❌ I couldn't extract job details from that text. Please send a full job description or posting."
+    )
+    return
+  }
+
+  if (!jobInfo.email) {
+    await ctx.runMutation(internal.telegramLinks.savePendingEmailInput, {
+      telegramChatId: chatId,
+      jobDescription: text,
+      company: jobInfo.company,
+      role: jobInfo.role,
+    })
+    await sendMessage(
+      botToken,
+      chatId,
+      `📝 Found: <b>${escapeHtml(jobInfo.company)}</b> — <b>${escapeHtml(jobInfo.role)}</b>\n\n` +
+        "⚠️ No contact email found in the posting. Please reply with the recruiter's email address."
+    )
+    return
+  }
+
+  // Check salary against user preferences
+  const prefs = await ctx.runQuery(internal.preferences.getByUserInternal, {
+    userId,
+  })
+  if (
+    prefs?.minSalary &&
+    jobInfo.salary !== null &&
+    jobInfo.salary < prefs.minSalary
+  ) {
+    const formatSalary = (n: number) => "$" + n.toLocaleString("en-US")
+    const reviewId = await ctx.runMutation(
+      internal.telegramLinks.savePendingSalaryReview,
+      {
+        telegramChatId: chatId,
+        userId,
         jobDescription: text,
         company: jobInfo.company,
         role: jobInfo.role,
-      })
-      await sendMessage(
-        botToken,
-        chatId,
-        `📝 Found: *${jobInfo.company}* — *${jobInfo.role}*\n\n` +
-          "⚠️ No contact email found in the posting. Please reply with the recruiter's email address."
-      )
-      return
-    }
+        email: jobInfo.email,
+        salary: jobInfo.salary,
+      }
+    )
+    await sendMessage(
+      botToken,
+      chatId,
+      `💰 <b>Salary alert</b>\n\n` +
+        `<b>${escapeHtml(jobInfo.company)}</b> — ${escapeHtml(jobInfo.role)}\n` +
+        `Listed salary: <b>${formatSalary(jobInfo.salary)}</b>\n` +
+        `Your minimum: <b>${formatSalary(prefs.minSalary)}</b>\n\n` +
+        `This role pays <b>${formatSalary(prefs.minSalary - jobInfo.salary)}</b> below your minimum. Do you still want to apply?`,
+      {
+        inline_keyboard: [
+          [
+            {
+              text: "✅ Apply anyway",
+              callback_data: `salary_proceed:${reviewId}`,
+            },
+            { text: "⏭ Skip", callback_data: `salary_skip:${reviewId}` },
+          ],
+        ],
+      }
+    )
+    return
+  }
 
-    // Generate cover letter
-    let coverLetter: string
-    try {
-      coverLetter = await generateCoverLetterHelper(
-        ctx,
-        text,
-        jobInfo.company,
-        jobInfo.role,
-        link.userId,
-      )
-    } catch (err) {
-      await sendMessage(
-        botToken,
-        chatId,
-        `❌ Failed to generate cover letter: ${String(err)}`
-      )
-      return
-    }
+  await continueWithApplication(
+    ctx,
+    botToken,
+    chatId,
+    userId,
+    text,
+    jobInfo.company,
+    jobInfo.role,
+    jobInfo.email
+  )
+}
 
-    const subject = `Application for ${jobInfo.role} at ${jobInfo.company}`
+async function continueWithApplication(
+  ctx: ActionCtx,
+  botToken: string,
+  chatId: string,
+  userId: string,
+  jobDescription: string,
+  company: string,
+  role: string,
+  email: string
+) {
+  let coverLetter: string
+  try {
+    coverLetter = await generateCoverLetterHelper(
+      ctx,
+      jobDescription,
+      company,
+      role,
+      userId
+    )
+  } catch (err) {
+    await sendMessage(
+      botToken,
+      chatId,
+      `❌ Failed to generate cover letter: ${String(err)}`
+    )
+    return
+  }
 
-    await createPendingActionAndPreview(ctx, botToken, chatId, link.userId, {
-      to: jobInfo.email,
-      subject,
-      body: coverLetter,
-      company: jobInfo.company,
-      role: jobInfo.role,
-      coverLetter,
+  const subject = `Application for ${role} at ${company}`
+  await createPendingActionAndPreview(ctx, botToken, chatId, userId, {
+    to: email,
+    subject,
+    body: coverLetter,
+    company,
+    role,
+    coverLetter,
+  })
+}
+
+// ── Buffered message processor (debounced) ──
+
+export const processBufferedMessage = internalAction({
+  args: {
+    telegramChatId: v.string(),
+    userId: v.string(),
+  },
+  handler: async (ctx, { telegramChatId, userId }) => {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN!
+
+    // Check if more messages are still arriving (debounce)
+    const buf = await ctx.runQuery(internal.telegramLinks.getMessageBuffer, {
+      telegramChatId,
     })
+    if (!buf) return
+
+    if (Date.now() - buf.lastMessageAt < 2000) {
+      // More parts may be incoming — reschedule
+      await ctx.scheduler.runAfter(
+        2000,
+        internal.telegram.processBufferedMessage,
+        {
+          telegramChatId,
+          userId,
+        }
+      )
+      return
+    }
+
+    // Consume the buffer and process
+    const fullText: string | null = await ctx.runMutation(
+      internal.telegramLinks.consumeMessageBuffer,
+      { telegramChatId }
+    )
+    if (!fullText) return
+
+    await processJobDescription(ctx, botToken, telegramChatId, userId, fullText)
   },
 })
 
@@ -490,13 +859,25 @@ async function handleCallbackQuery(
       await ctx.runMutation(internal.pendingActions.internalApprove, {
         id: actionId,
       })
-      await answerCallbackQuery(botToken, callbackQuery.id, "Approved! Sending email...")
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        "Approved! Sending email..."
+      )
       if (messageId) {
         await editMessageReplyMarkup(botToken, chatId, messageId)
       }
-      await sendMessage(botToken, chatId, "✅ *Approved!* Sending your application now...")
+      await sendMessage(
+        botToken,
+        chatId,
+        "✅ <b>Approved!</b> Sending your application now..."
+      )
     } catch (err) {
-      await answerCallbackQuery(botToken, callbackQuery.id, `Error: ${String(err)}`)
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        `Error: ${String(err)}`
+      )
     }
   } else if (data.startsWith("reject:")) {
     const actionId = data.replace("reject:", "") as Id<"pendingActions">
@@ -508,9 +889,89 @@ async function handleCallbackQuery(
       if (messageId) {
         await editMessageReplyMarkup(botToken, chatId, messageId)
       }
-      await sendMessage(botToken, chatId, "❌ Application rejected. The email was not sent.")
+      await sendMessage(
+        botToken,
+        chatId,
+        "❌ Application rejected. The email was not sent."
+      )
     } catch (err) {
-      await answerCallbackQuery(botToken, callbackQuery.id, `Error: ${String(err)}`)
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        `Error: ${String(err)}`
+      )
+    }
+  } else if (data.startsWith("salary_proceed:")) {
+    const reviewId = data.replace(
+      "salary_proceed:",
+      ""
+    ) as Id<"pendingSalaryReview">
+    try {
+      const review = await ctx.runQuery(
+        internal.telegramLinks.getPendingSalaryReview,
+        { id: reviewId }
+      )
+      if (!review) {
+        await answerCallbackQuery(
+          botToken,
+          callbackQuery.id,
+          "This review has expired."
+        )
+        return
+      }
+      await ctx.runMutation(internal.telegramLinks.deletePendingSalaryReview, {
+        id: reviewId,
+      })
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        "Proceeding with application..."
+      )
+      if (messageId) {
+        await editMessageReplyMarkup(botToken, chatId, messageId)
+      }
+      await sendMessage(botToken, chatId, "⏳ Generating your cover letter...")
+      await continueWithApplication(
+        ctx,
+        botToken,
+        chatId,
+        review.userId,
+        review.jobDescription,
+        review.company,
+        review.role,
+        review.email
+      )
+    } catch (err) {
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        `Error: ${String(err)}`
+      )
+    }
+  } else if (data.startsWith("salary_skip:")) {
+    const reviewId = data.replace(
+      "salary_skip:",
+      ""
+    ) as Id<"pendingSalaryReview">
+    try {
+      await ctx.runMutation(internal.telegramLinks.deletePendingSalaryReview, {
+        id: reviewId,
+      })
+      await answerCallbackQuery(botToken, callbackQuery.id, "Skipped.")
+      if (messageId) {
+        await editMessageReplyMarkup(botToken, chatId, messageId)
+      }
+      await sendMessage(
+        botToken,
+        chatId,
+        "⏭ Skipped. Send another job description when you're ready."
+      )
+    } catch (err) {
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        `Error: ${String(err)}`
+      )
     }
   } else if (data.startsWith("retry:")) {
     const actionId = data.replace("retry:", "") as Id<"pendingActions">
@@ -522,9 +983,17 @@ async function handleCallbackQuery(
       if (messageId) {
         await editMessageReplyMarkup(botToken, chatId, messageId)
       }
-      await sendMessage(botToken, chatId, "🔄 *Retrying...* Sending your application again.")
+      await sendMessage(
+        botToken,
+        chatId,
+        "🔄 <b>Retrying...</b> Sending your application again."
+      )
     } catch (err) {
-      await answerCallbackQuery(botToken, callbackQuery.id, `Error: ${String(err)}`)
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        `Error: ${String(err)}`
+      )
     }
   }
 }
@@ -542,7 +1011,10 @@ export const executeApprovedAction = internalAction({
       id: pendingActionId,
     })
     if (!action || action.status !== "approved") {
-      console.error("[telegram] Action not found or not approved:", pendingActionId)
+      console.error(
+        "[telegram] Action not found or not approved:",
+        pendingActionId
+      )
       return
     }
 
@@ -554,18 +1026,34 @@ export const executeApprovedAction = internalAction({
       const managementToken = await getAuth0ManagementToken()
       const senderInfo = await getUserEmail(managementToken, action.userId)
 
-      // Create application record
-      const applicationId = await ctx.runMutation(
-        internal.applications.internalCreate,
-        {
-          userId: action.userId,
-          company: action.payload.company,
-          role: action.payload.role,
-          coverLetter: action.payload.coverLetter,
-          recipientEmail: action.payload.to,
-          source: "telegram" as const,
-        }
-      )
+      const isFollowUp = !!action.applicationId
+
+      // For new applications, create a record. For follow-ups, reuse existing.
+      let applicationId: Id<"applications">
+      let gmailThreadId: string | undefined
+      if (isFollowUp) {
+        applicationId = action.applicationId!
+        // Look up existing thread ID for threading the reply
+        const existingApp = await ctx.runQuery(
+          internal.applications.internalGetById,
+          {
+            id: applicationId,
+          }
+        )
+        gmailThreadId = existingApp?.gmailThreadId
+      } else {
+        applicationId = await ctx.runMutation(
+          internal.applications.internalCreate,
+          {
+            userId: action.userId,
+            company: action.payload.company,
+            role: action.payload.role,
+            coverLetter: action.payload.coverLetter,
+            recipientEmail: action.payload.to,
+            source: "telegram" as const,
+          }
+        )
+      }
 
       // Build tracking pixel URL
       const trackingPixelUrl = convexSiteUrl
@@ -581,6 +1069,13 @@ export const executeApprovedAction = internalAction({
         trackingPixelUrl,
       })
 
+      const gmailBody: { raw: string; threadId?: string } = {
+        raw: encodedEmail,
+      }
+      if (gmailThreadId) {
+        gmailBody.threadId = gmailThreadId
+      }
+
       const gmailRes = await fetch(
         "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
         {
@@ -589,7 +1084,7 @@ export const executeApprovedAction = internalAction({
             Authorization: `Bearer ${gmailToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ raw: encodedEmail }),
+          body: JSON.stringify(gmailBody),
         }
       )
 
@@ -600,8 +1095,8 @@ export const executeApprovedAction = internalAction({
 
       const gmailResult = await gmailRes.json()
 
-      // Store thread ID
-      if (gmailResult.threadId) {
+      // Store thread ID (for new applications)
+      if (!isFollowUp && gmailResult.threadId) {
         try {
           await ctx.runMutation(internal.applications.internalSetThreadId, {
             id: applicationId,
@@ -621,14 +1116,15 @@ export const executeApprovedAction = internalAction({
 
       // Notify user via Telegram
       if (action.telegramChatId) {
-        await sendMessage(
-          botToken,
-          action.telegramChatId,
-          `🎉 *Application sent!*\n\n` +
-            `*${action.payload.company}* — ${action.payload.role}\n` +
-            `📬 Sent to: ${action.payload.to}\n\n` +
-            `_I'll notify you when they reply._`
-        )
+        const notifyText = isFollowUp
+          ? `📬 <b>Follow-up sent!</b>\n\n` +
+            `<b>${escapeHtml(action.payload.company)}</b> — ${escapeHtml(action.payload.role)}\n` +
+            `📬 Sent to: ${escapeHtml(action.payload.to)}`
+          : `🎉 <b>Application sent!</b>\n\n` +
+            `<b>${escapeHtml(action.payload.company)}</b> — ${escapeHtml(action.payload.role)}\n` +
+            `📬 Sent to: ${escapeHtml(action.payload.to)}\n\n` +
+            `<i>I'll notify you when they reply.</i>`
+        await sendMessage(botToken, action.telegramChatId, notifyText)
       }
     } catch (err) {
       // Mark action as failed
@@ -643,9 +1139,9 @@ export const executeApprovedAction = internalAction({
         await sendMessage(
           botToken,
           action.telegramChatId,
-          `⚠️ *Failed to send application*\n\n` +
-            `${action.payload.company} — ${action.payload.role}\n` +
-            `Error: ${String(err)}`,
+          `⚠️ <b>Failed to send application</b>\n\n` +
+            `${escapeHtml(action.payload.company)} — ${escapeHtml(action.payload.role)}\n` +
+            `Error: ${escapeHtml(String(err))}`,
           {
             inline_keyboard: [
               [{ text: "🔄 Retry", callback_data: `retry:${pendingActionId}` }],

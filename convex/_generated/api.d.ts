@@ -10,7 +10,9 @@
 
 import type * as aiActions from "../aiActions.js";
 import type * as applications from "../applications.js";
+import type * as auth0 from "../auth0.js";
 import type * as crons from "../crons.js";
+import type * as followUp from "../followUp.js";
 import type * as http from "../http.js";
 import type * as inboxChecker from "../inboxChecker.js";
 import type * as pendingActions from "../pendingActions.js";
@@ -30,7 +32,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   aiActions: typeof aiActions;
   applications: typeof applications;
+  auth0: typeof auth0;
   crons: typeof crons;
+  followUp: typeof followUp;
   http: typeof http;
   inboxChecker: typeof inboxChecker;
   pendingActions: typeof pendingActions;

@@ -125,6 +125,21 @@ export const unlink = mutation({
   },
 })
 
+export const internalUnlinkByChatId = internalMutation({
+  args: { telegramChatId: v.string() },
+  handler: async (ctx, { telegramChatId }) => {
+    const link = await ctx.db
+      .query("telegramLinks")
+      .withIndex("by_telegramChatId", (q) =>
+        q.eq("telegramChatId", telegramChatId)
+      )
+      .first()
+    if (link) {
+      await ctx.db.delete(link._id)
+    }
+  },
+})
+
 // Returns true if this update was already processed (duplicate)
 export const checkAndMarkUpdate = internalMutation({
   args: { updateId: v.number() },
@@ -193,6 +208,142 @@ export const deletePendingEmailInput = internalMutation({
   },
 })
 
+// ── Message buffer (for split Telegram messages) ──
+
+export const appendToMessageBuffer = internalMutation({
+  args: {
+    telegramChatId: v.string(),
+    text: v.string(),
+  },
+  handler: async (ctx, { telegramChatId, text }) => {
+    const existing = await ctx.db
+      .query("messageBuffer")
+      .withIndex("by_telegramChatId", (q) => q.eq("telegramChatId", telegramChatId))
+      .first()
+    const now = Date.now()
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        parts: [...existing.parts, text],
+        lastMessageAt: now,
+      })
+      return { isFirst: false }
+    }
+    await ctx.db.insert("messageBuffer", {
+      telegramChatId,
+      parts: [text],
+      lastMessageAt: now,
+    })
+    return { isFirst: true }
+  },
+})
+
+export const consumeMessageBuffer = internalMutation({
+  args: { telegramChatId: v.string() },
+  handler: async (ctx, { telegramChatId }) => {
+    const buf = await ctx.db
+      .query("messageBuffer")
+      .withIndex("by_telegramChatId", (q) => q.eq("telegramChatId", telegramChatId))
+      .first()
+    if (!buf) return null
+    await ctx.db.delete(buf._id)
+    return buf.parts.join("\n")
+  },
+})
+
+export const getMessageBuffer = internalQuery({
+  args: { telegramChatId: v.string() },
+  handler: async (ctx, { telegramChatId }) => {
+    return await ctx.db
+      .query("messageBuffer")
+      .withIndex("by_telegramChatId", (q) => q.eq("telegramChatId", telegramChatId))
+      .first()
+  },
+})
+
+// ── Job input mode (user must /job before pasting a job description) ──
+
+export const setJobInputMode = internalMutation({
+  args: { telegramChatId: v.string() },
+  handler: async (ctx, { telegramChatId }) => {
+    const existing = await ctx.db
+      .query("jobInputMode")
+      .withIndex("by_telegramChatId", (q) => q.eq("telegramChatId", telegramChatId))
+      .first()
+    if (existing) return // already in job mode
+    await ctx.db.insert("jobInputMode", {
+      telegramChatId,
+      createdAt: Date.now(),
+    })
+  },
+})
+
+export const getJobInputMode = internalQuery({
+  args: { telegramChatId: v.string() },
+  handler: async (ctx, { telegramChatId }) => {
+    return await ctx.db
+      .query("jobInputMode")
+      .withIndex("by_telegramChatId", (q) => q.eq("telegramChatId", telegramChatId))
+      .first()
+  },
+})
+
+export const clearJobInputMode = internalMutation({
+  args: { telegramChatId: v.string() },
+  handler: async (ctx, { telegramChatId }) => {
+    const doc = await ctx.db
+      .query("jobInputMode")
+      .withIndex("by_telegramChatId", (q) => q.eq("telegramChatId", telegramChatId))
+      .first()
+    if (doc) {
+      await ctx.db.delete(doc._id)
+    }
+  },
+})
+
+// ── Pending salary review (when salary is below user's minimum) ──
+
+export const savePendingSalaryReview = internalMutation({
+  args: {
+    telegramChatId: v.string(),
+    userId: v.string(),
+    jobDescription: v.string(),
+    company: v.string(),
+    role: v.string(),
+    email: v.string(),
+    salary: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("pendingSalaryReview")
+      .withIndex("by_telegramChatId", (q) => q.eq("telegramChatId", args.telegramChatId))
+      .first()
+    if (existing) {
+      await ctx.db.delete(existing._id)
+    }
+    return await ctx.db.insert("pendingSalaryReview", {
+      ...args,
+      createdAt: Date.now(),
+    })
+  },
+})
+
+export const getPendingSalaryReview = internalQuery({
+  args: { id: v.id("pendingSalaryReview") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id)
+  },
+})
+
+export const deletePendingSalaryReview = internalMutation({
+  args: { id: v.id("pendingSalaryReview") },
+  handler: async (ctx, { id }) => {
+    const doc = await ctx.db.get(id)
+    if (doc) {
+      await ctx.db.delete(id)
+    }
+  },
+})
+
 export const cleanup = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -222,6 +373,36 @@ export const cleanup = internalMutation({
       .filter((q) => q.lt(q.field("createdAt"), emailCutoff))
       .take(100)
     for (const doc of stalePending) {
+      await ctx.db.delete(doc._id)
+    }
+
+    // Clean up stale message buffers (older than 5 minutes)
+    const bufferCutoff = now - 5 * 60 * 1000
+    const staleBuffers = await ctx.db
+      .query("messageBuffer")
+      .filter((q) => q.lt(q.field("lastMessageAt"), bufferCutoff))
+      .take(100)
+    for (const doc of staleBuffers) {
+      await ctx.db.delete(doc._id)
+    }
+
+    // Clean up stale job input mode flags (older than 10 minutes)
+    const jobModeCutoff = now - 10 * 60 * 1000
+    const staleJobModes = await ctx.db
+      .query("jobInputMode")
+      .filter((q) => q.lt(q.field("createdAt"), jobModeCutoff))
+      .take(100)
+    for (const doc of staleJobModes) {
+      await ctx.db.delete(doc._id)
+    }
+
+    // Clean up stale pending salary reviews (older than 30 minutes)
+    const salaryReviewCutoff = now - 30 * 60 * 1000
+    const staleSalaryReviews = await ctx.db
+      .query("pendingSalaryReview")
+      .filter((q) => q.lt(q.field("createdAt"), salaryReviewCutoff))
+      .take(100)
+    for (const doc of staleSalaryReviews) {
       await ctx.db.delete(doc._id)
     }
   },

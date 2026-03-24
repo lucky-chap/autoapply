@@ -24,4 +24,11 @@ crons.interval(
   {}
 )
 
+crons.interval(
+  "send follow-up emails for stale applications",
+  { hours: 12 },
+  internal.followUp.checkAndSendFollowUps,
+  {}
+)
+
 export default crons

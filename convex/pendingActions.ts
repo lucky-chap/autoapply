@@ -22,6 +22,7 @@ export const create = internalMutation({
     telegramMessageId: v.optional(v.string()),
     telegramChatId: v.optional(v.string()),
     source: v.union(v.literal("telegram"), v.literal("web")),
+    applicationId: v.optional(v.id("applications")),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("pendingActions", {

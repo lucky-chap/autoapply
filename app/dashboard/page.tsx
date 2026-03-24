@@ -51,7 +51,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Left Column: Recent Activity / Resume */}
         <div className="space-y-8 lg:col-span-2">
-          <ResumeProfileBox userId={user.sub} />
+          {/* <ResumeProfileBox userId={user.sub} /> */}
 
           <PendingActions userId={user.sub} />
 

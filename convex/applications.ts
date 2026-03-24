@@ -38,6 +38,13 @@ export const getById = query({
   },
 })
 
+export const internalGetById = internalQuery({
+  args: { id: v.id("applications") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id)
+  },
+})
+
 export const getOpens = query({
   args: { applicationId: v.id("applications") },
   handler: async (ctx, { applicationId }) => {
@@ -170,6 +177,30 @@ export const getRecentByUserInternal = internalQuery({
   },
 })
 
+export const getApplicationsNeedingFollowUp = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    return await ctx.db
+      .query("applications")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("status"), "Applied"),
+          q.lt(q.field("emailSentAt"), sevenDaysAgo),
+          q.eq(q.field("followUpSentAt"), undefined)
+        )
+      )
+      .take(50)
+  },
+})
+
+export const internalSetFollowUpSent = internalMutation({
+  args: { id: v.id("applications") },
+  handler: async (ctx, { id }) => {
+    await ctx.db.patch(id, { followUpSentAt: Date.now() })
+  },
+})
+
 export const internalUpdateStatus = internalMutation({
   args: {
     id: v.id("applications"),
@@ -180,8 +211,12 @@ export const internalUpdateStatus = internalMutation({
       v.literal("Offer"),
       v.literal("Rejected")
     ),
+    lastCheckedGmailMsgId: v.optional(v.string()),
   },
-  handler: async (ctx, { id, status }) => {
-    await ctx.db.patch(id, { status })
+  handler: async (ctx, { id, status, lastCheckedGmailMsgId }) => {
+    await ctx.db.patch(id, {
+      status,
+      ...(lastCheckedGmailMsgId !== undefined ? { lastCheckedGmailMsgId } : {}),
+    })
   },
 })

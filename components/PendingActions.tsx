@@ -14,18 +14,8 @@ export function PendingActions({ userId }: { userId: string }) {
 
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
-  if (pendingActions === undefined) {
-    return (
-      <div className="animate-pulse space-y-3 p-4">
-        {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-xl bg-gray-50" />
-        ))}
-      </div>
-    )
-  }
-
-  if (pendingActions.length === 0) {
-    return null // Don't show the section if no pending actions
+  if (pendingActions === undefined || pendingActions.length === 0) {
+    return null
   }
 
   const handleApprove = async (id: Id<"pendingActions">) => {
