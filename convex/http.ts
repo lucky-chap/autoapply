@@ -45,6 +45,29 @@ http.route({
   }),
 })
 
+// Store refresh token — called from Next.js API routes with a shared secret
+http.route({
+  path: "/api/store-refresh-token",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const secret = req.headers.get("Authorization")
+    if (!secret || secret !== `Bearer ${process.env.CONVEX_API_SECRET}`) {
+      return new Response("Unauthorized", { status: 401 })
+    }
+
+    const { userId, auth0RefreshToken } = await req.json()
+    if (!userId || !auth0RefreshToken) {
+      return new Response("Missing userId or auth0RefreshToken", { status: 400 })
+    }
+
+    await ctx.runMutation(internal.userTokens.upsertRefreshToken, {
+      userId,
+      auth0RefreshToken,
+    })
+    return new Response("OK", { status: 200 })
+  }),
+})
+
 // Telegram bot webhook
 http.route({
   path: "/telegram/webhook",

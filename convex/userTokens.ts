@@ -1,7 +1,7 @@
-import { mutation, internalQuery } from "./_generated/server"
+import { internalMutation, internalQuery } from "./_generated/server"
 import { v } from "convex/values"
 
-export const upsertRefreshToken = mutation({
+export const upsertRefreshToken = internalMutation({
   args: {
     userId: v.string(),
     auth0RefreshToken: v.string(),

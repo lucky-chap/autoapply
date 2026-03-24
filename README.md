@@ -59,7 +59,16 @@ This project uses the Auth0 Token Vault and My Account API for secure connection
    - Click **"Enable"** to activate the Gmail API
    - This only needs to be done once — all users authenticate through your project
 
-10. **Publish Google OAuth App**:
+10. **Enable Refresh Token Rotation** (Recommended):
+    - In your Auth0 App Settings, find the **Refresh Token Expiration** section:
+        - Toggle **Set Idle Refresh Token Lifetime** to `Enabled` and set it to `1209600` (14 days).
+        - Toggle **Set Maximum Refresh Token Lifetime** to `Enabled` and set it to `2592000` (30 days).
+    - Find the **Refresh Token Rotation** section:
+        - Toggle **Rotation** to `Enabled`.
+        - Set **Rotation Overlap Period** to `60` seconds.
+    - Our system in `convex/tokenVault.ts` handles this rotation automatically to ensure continuous background service.
+
+11. **Publish Google OAuth App**:
    - Go to [Google Cloud Console → OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
    - Click **"Publish App"** to allow any Google user to authorize
    - While in Testing mode, only manually-added test users can complete the Google consent flow
@@ -75,6 +84,7 @@ AUTH0_SECRET=<random-32-byte-secret>
 APP_BASE_URL=http://localhost:3000
 NEXT_PUBLIC_CONVEX_URL=<your-convex-deployment-url>
 GLM_API_KEY=<your-glm-api-key>
+ENCRYPTION_SECRET=<random-32-character-string>
 ```
 
 ### Convex Environment Variables
@@ -92,6 +102,7 @@ TELEGRAM_BOT_TOKEN=<bot-token-from-botfather>
 TELEGRAM_WEBHOOK_SECRET=<random-hex-string>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_CONVEX_SITE_URL=<your-convex-site-url>
+ENCRYPTION_SECRET=<random-32-character-string>
 ```
 
 **How to get these:**
@@ -222,3 +233,29 @@ Without this, Google access tokens expire after ~1 hour and background operation
 - **"Token Vault exchange failed (400)"**: The Token Vault grant type may not be enabled on your Auth0 app. Check Advanced Settings → Grant Types → Token Vault.
 - **"Token Vault exchange failed (403)"**: The user hasn't connected their Google account via the Permissions page yet. They need to connect Google first.
 - **"Unknown or invalid refresh token"**: The stored refresh token may have expired or been revoked. The user needs to log out and log back in, then perform any action on the web app to refresh the stored token.
+
+---
+
+## Architecture Decisions & Security
+
+### Storing Auth0 Refresh Tokens (Encrypted)
+
+Unlike standard web applications that only perform actions during an active user session, AutoApply features **autonomous background agents**:
+
+1. **Telegram Bot**: Users can apply to jobs directly from Telegram. The bot runs as a Convex Action, far removed from the user's Auth0 browser session.
+2. **Inbox Monitor (Cron)**: A background job checks for recruiter replies every 5 minutes.
+
+To allow these background processes to act on a user's behalf (via Auth0 Token Vault), the backend must have a way to identify itself to Auth0. We store a **Master Key** (the long-lived Auth0 Refresh Token) in the Convex database to bridge this gap.
+
+**Why not just use Auth0 + Convex Session Auth?**
+Even if Convex is configured to recognize your Auth0 `ID Token` natively, that token is short-lived (usually 1 hour). More importantly, it is only available when a user is actively sending a request from their browser. Processes like **Telegram Webhooks** and **Background Crons** do not have access to your browser's Auth0 session.
+
+**Why not "No Storage" (Option 2)?**
+Removing storage entirely would mean the Telegram bot and Cron jobs could never obtain a fresh Google Access Token once the initial ephemeral login session expired. This would transform AutoApply from an autonomous agent into a simple web-form.
+
+### Defense in Depth
+To mitigate the risk of storing these "Master Keys":
+- **Encryption at Rest**: Every Auth0 Refresh Token is encrypted using **AES-256-GCM** before being saved to Convex.
+- **Environment Isolation**: The decryption key (`ENCRYPTION_SECRET`) is never stored in the database; it only exists as a server-side environment variable.
+- **Scope Limitation**: The tokens only grant the specific permissions (`gmail.send`, etc.) authorized by the user, not full account access.
+- **Automatic Rotation Handling**: Many modern OAuth 2.0 implementations (including Auth0) use **Refresh Token Rotation**. Our system in `convex/tokenVault.ts` is designed to capture, re-encrypt, and save any new refresh tokens issued during a background exchange, ensuring continuous service without user intervention.

@@ -1,6 +1,7 @@
 import { auth0 } from "@/lib/auth0"
 import { ConvexHttpClient } from "convex/browser"
 import { api } from "@/convex/_generated/api"
+import { encrypt } from "@/lib/encryption"
 import { NextResponse } from "next/server"
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
@@ -37,10 +38,17 @@ export async function GET(req: Request) {
     // for fresh Google tokens via Token Vault
     const refreshToken = (session.tokenSet as { refreshToken?: string })?.refreshToken
     if (refreshToken) {
-      await convex.mutation(api.userTokens.upsertRefreshToken, {
-        userId,
-        auth0RefreshToken: refreshToken,
-      })
+      const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL
+      if (siteUrl && process.env.CONVEX_API_SECRET) {
+        await fetch(`${siteUrl}/api/store-refresh-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.CONVEX_API_SECRET}`,
+          },
+          body: JSON.stringify({ userId, auth0RefreshToken: encrypt(refreshToken) }),
+        })
+      }
     }
 
     return NextResponse.redirect(

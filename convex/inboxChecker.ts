@@ -1,6 +1,6 @@
 import { internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
-import { getGmailTokenViaTokenVault } from "./tokenVault"
+import { getGmailTokenViaTokenVault, TokenVaultError } from "./tokenVault"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
 
 // Decode base64url to UTF-8 string (Convex runtime has no Node Buffer)
@@ -170,6 +170,23 @@ export const checkAllInboxes = internalAction({
         gmailToken = await getGmailTokenViaTokenVault(ctx, userId)
       } catch (err) {
         console.log(`[cron] Token Vault failed for user ${userId}: ${err}`)
+        if (err instanceof TokenVaultError && err.isReauthRequired) {
+          // Notify via Telegram if linked
+          const link = await ctx.runQuery(
+            internal.telegramLinks.getLinkByUserIdInternal,
+            { userId }
+          )
+          if (link) {
+            const siteUrl = process.env.APP_BASE_URL || "the web app"
+            await ctx.runAction(internal.telegram.sendNotification, {
+              chatId: link.telegramChatId,
+              text:
+                `🔑 <b>Re-authorization required</b>\n\n` +
+                `Your Google session has expired so I can't check for replies.\n` +
+                `Please visit ${siteUrl} and send an application to refresh your session.`,
+            })
+          }
+        }
         continue
       }
 

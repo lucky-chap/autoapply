@@ -12,6 +12,16 @@
 
 import { internal } from "./_generated/api"
 import { ActionCtx } from "./_generated/server"
+import { encrypt, decrypt } from "../lib/encryption"
+
+export class TokenVaultError extends Error {
+  public readonly isReauthRequired: boolean
+  constructor(message: string, isReauthRequired: boolean) {
+    super(message)
+    this.name = "TokenVaultError"
+    this.isReauthRequired = isReauthRequired
+  }
+}
 
 export async function getGmailTokenViaTokenVault(
   ctx: ActionCtx,
@@ -33,9 +43,10 @@ export async function getGmailTokenViaTokenVault(
     userId,
   })
   if (!refreshToken) {
-    throw new Error(
+    throw new TokenVaultError(
       "No refresh token stored for this user. They need to use the web app first " +
-        "(send an application or link Telegram) so we can capture their session token."
+        "(send an application or link Telegram) so we can capture their session token.",
+      true
     )
   }
 
@@ -46,7 +57,7 @@ export async function getGmailTokenViaTokenVault(
     body: JSON.stringify({
       client_id: clientId,
       client_secret: clientSecret,
-      subject_token: refreshToken,
+      subject_token: decrypt(refreshToken),
       grant_type:
         "urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token",
       subject_token_type: "urn:ietf:params:oauth:token-type:refresh_token",
@@ -58,9 +69,30 @@ export async function getGmailTokenViaTokenVault(
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Token Vault exchange failed (${res.status}): ${err}`)
+    const isReauth = res.status === 401 || res.status === 403
+    throw new TokenVaultError(
+      `Token Vault exchange failed (${res.status}): ${err}`,
+      isReauth
+    )
   }
 
   const data = await res.json()
+
+  // IMPORTANT: Handle Refresh Token Rotation
+  // If Auth0 returns a new refresh_token, we must encrypt and store it immediately
+  // to ensure subsequent background actions (Crons/Telegram) don't fail.
+  if (data.refresh_token) {
+    try {
+      await ctx.runMutation(internal.userTokens.upsertRefreshToken, {
+        userId,
+        auth0RefreshToken: encrypt(data.refresh_token),
+      })
+    } catch (err) {
+      console.error("[TokenVault] Failed to save rotated refresh token:", err)
+      // We don't throw here — we already have the access_token, 
+      // but next time will fail if the old one was invalidated.
+    }
+  }
+
   return data.access_token
 }

@@ -3,7 +3,7 @@ import { internal } from "./_generated/api"
 import { v } from "convex/values"
 import { Id } from "./_generated/dataModel"
 import { extractJobInfoHelper, generateCoverLetterHelper } from "./aiActions"
-import { getGmailTokenViaTokenVault } from "./tokenVault"
+import { getGmailTokenViaTokenVault, TokenVaultError } from "./tokenVault"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
 
 // ── Telegram Bot API helpers ──
@@ -1134,20 +1134,39 @@ export const executeApprovedAction = internalAction({
         error: String(err),
       })
 
-      // Notify user via Telegram with retry button
+      // Notify user via Telegram
       if (action.telegramChatId) {
-        await sendMessage(
-          botToken,
-          action.telegramChatId,
-          `⚠️ <b>Failed to send application</b>\n\n` +
-            `${escapeHtml(action.payload.company)} — ${escapeHtml(action.payload.role)}\n` +
-            `Error: ${escapeHtml(String(err))}`,
-          {
-            inline_keyboard: [
-              [{ text: "🔄 Retry", callback_data: `retry:${pendingActionId}` }],
-            ],
-          }
-        )
+        const siteUrl = process.env.APP_BASE_URL || "the web app"
+        const isTokenError = err instanceof TokenVaultError && err.isReauthRequired
+
+        if (isTokenError) {
+          await sendMessage(
+            botToken,
+            action.telegramChatId,
+            `🔑 <b>Re-authorization required</b>\n\n` +
+              `Your Google session has expired. Please visit the web app to re-authorize:\n` +
+              `${escapeHtml(siteUrl)}\n\n` +
+              `After logging in, send a new application from the web to refresh your session, then retry here.`,
+            {
+              inline_keyboard: [
+                [{ text: "🔄 Retry", callback_data: `retry:${pendingActionId}` }],
+              ],
+            }
+          )
+        } else {
+          await sendMessage(
+            botToken,
+            action.telegramChatId,
+            `⚠️ <b>Failed to send application</b>\n\n` +
+              `${escapeHtml(action.payload.company)} — ${escapeHtml(action.payload.role)}\n` +
+              `Error: ${escapeHtml(String(err))}`,
+            {
+              inline_keyboard: [
+                [{ text: "🔄 Retry", callback_data: `retry:${pendingActionId}` }],
+              ],
+            }
+          )
+        }
       }
     }
   },
