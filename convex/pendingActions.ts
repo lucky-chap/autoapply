@@ -191,5 +191,14 @@ export const cleanupStale = internalMutation({
         error: "Expired — no response within 24 hours",
       })
     }
+
+    // Clean up stale calendar slot records older than 24 hours
+    const staleSlots = await ctx.db
+      .query("pendingCalendarSlots")
+      .filter((q) => q.lt(q.field("createdAt"), oneDayAgo))
+      .take(100)
+    for (const doc of staleSlots) {
+      await ctx.db.delete(doc._id)
+    }
   },
 })

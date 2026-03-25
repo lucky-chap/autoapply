@@ -4,6 +4,7 @@ import { v } from "convex/values"
 import { Id } from "./_generated/dataModel"
 import { extractJobInfoHelper, generateCoverLetterHelper } from "./aiActions"
 import { getGmailTokenViaTokenVault, TokenVaultError } from "./tokenVault"
+import { analyzeAvailability } from "./calendar"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
 
 // ── Telegram Bot API helpers ──
@@ -991,7 +992,9 @@ async function handleCallbackQuery(
     } catch (err) {
       await answerCallbackQuery(botToken, callbackQuery.id, `Error: ${String(err)}`)
     }
-  } else if (data === "calendar_check") {
+  // ── Calendar: check availability ──
+  } else if (data.startsWith("cal:")) {
+    const appId = data.replace("cal:", "") as Id<"applications">
     try {
       const link = await ctx.runQuery(
         internal.telegramLinks.getLinkByTelegramChatId,
@@ -1002,13 +1005,18 @@ async function handleCallbackQuery(
         return
       }
 
-      // 1. Answer immediately (no text) to stop the loading spinner
       await answerCallbackQuery(botToken, callbackQuery.id)
-
-      // 2. Inform the user we are checking
       await sendMessage(botToken, chatId, "⏳ <b>Checking your calendar...</b>")
 
-      // Check conflicts for next 48 hours
+      const app = await ctx.runQuery(
+        internal.applications.internalGetById,
+        { id: appId }
+      )
+      if (!app) {
+        await sendMessage(botToken, chatId, "❌ Application not found.")
+        return
+      }
+
       const now = new Date()
       const end = new Date(now.getTime() + 48 * 60 * 60 * 1000)
 
@@ -1018,34 +1026,58 @@ async function handleCallbackQuery(
         endTime: end.toISOString(),
       })
 
-      if (events.length === 0) {
-        await sendMessage(
-          botToken,
-          chatId,
-          "📅 <b>Your calendar is clear</b> for the next 48 hours!"
-        )
+      const result = analyzeAvailability(
+        events,
+        app.proposedTimes || [],
+        now,
+        end
+      )
+
+      // Store slots for later use by cal_reply / cal_block
+      await ctx.runMutation(internal.calendar.upsertCalendarSlots, {
+        applicationId: appId,
+        telegramChatId: chatId,
+        slots: result.suggestedSlots,
+        proposedTimeStatus: result.proposedTimeStatus,
+      })
+
+      // Build the rich message
+      let msg = `📅 <b>Calendar Check — ${escapeHtml(app.company)} (${escapeHtml(app.role)})</b>\n`
+
+      if (result.events.length > 0) {
+        msg += `\n<b>Upcoming Events (Next 48h):</b>\n`
+        for (const ev of result.events) {
+          msg += `• <b>${escapeHtml(ev.summary)}</b>\n  ${escapeHtml(ev.label)}\n`
+        }
       } else {
-        const eventLines = events.map((e: any) => {
-          const start = new Date(e.start.dateTime || e.start.date)
-          const timeStr = start.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-          })
-          const dateStr = start.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          })
-          return `• <b>${escapeHtml(e.summary)}</b>\n  ${dateStr} @ ${timeStr}`
-        })
-        await sendMessage(
-          botToken,
-          chatId,
-          `📅 <b>Upcoming Events (Next 48h):</b>\n\n${eventLines.join("\n\n")}`
-        )
+        msg += `\nYour calendar is clear for the next 48 hours.\n`
       }
+
+      if (result.proposedTimeStatus.length > 0) {
+        msg += `\n⏰ <b>Proposed Times from Recruiter:</b>\n`
+        for (const pt of result.proposedTimeStatus) {
+          const icon = pt.available === true ? "✅" : pt.available === false ? "❌" : "❓"
+          msg += `${icon} ${escapeHtml(pt.label)}\n`
+        }
+      }
+
+      if (result.suggestedSlots.length > 0) {
+        msg += `\n💡 <b>Suggested Free Slots:</b>\n`
+        result.suggestedSlots.forEach((s, i) => {
+          msg += `${i + 1}. ${escapeHtml(s.label)}\n`
+        })
+      }
+
+      const buttons: { text: string; callback_data: string }[][] = [
+        [
+          { text: "📧 Reply with Availability", callback_data: `cal_reply:${appId}` },
+          { text: "📅 Block Time", callback_data: `cal_block:${appId}` },
+        ],
+      ]
+
+      await sendMessage(botToken, chatId, msg, { inline_keyboard: buttons })
     } catch (err) {
-      console.error("[telegram] calendar_check failed:", err)
+      console.error("[telegram] cal: check failed:", err)
       if (String(err).includes("MISSING_CALENDAR_SCOPE")) {
         const permissionsUrl =
           (process.env.NEXT_PUBLIC_SITE_URL ||
@@ -1063,6 +1095,268 @@ async function handleCallbackQuery(
           botToken,
           chatId,
           `❌ <b>Failed to check calendar</b>\n\n${escapeHtml(String(err))}`
+        )
+      }
+    }
+
+  // ── Calendar: reply with availability ──
+  } else if (data.startsWith("cal_reply:")) {
+    const appId = data.replace("cal_reply:", "") as Id<"applications">
+    try {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!link) {
+        await answerCallbackQuery(botToken, callbackQuery.id, "Account not linked.")
+        return
+      }
+      await answerCallbackQuery(botToken, callbackQuery.id)
+
+      const app = await ctx.runQuery(
+        internal.applications.internalGetById,
+        { id: appId }
+      )
+      if (!app) {
+        await sendMessage(botToken, chatId, "❌ Application not found.")
+        return
+      }
+
+      const slotsDoc = await ctx.runQuery(internal.calendar.getCalendarSlots, {
+        applicationId: appId,
+        telegramChatId: chatId,
+      })
+
+      if (!slotsDoc) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Already used or expired. Tap below to refresh.",
+          {
+            inline_keyboard: [
+              [{ text: "📅 Check My Calendar", callback_data: `cal:${appId}` }],
+            ],
+          }
+        )
+        return
+      }
+
+      // Build the list of available times for the email
+      const availableTimes: string[] = []
+      for (const pt of slotsDoc.proposedTimeStatus) {
+        if (pt.available === true) availableTimes.push(pt.label)
+      }
+      for (const s of slotsDoc.slots) {
+        availableTimes.push(s.label)
+      }
+
+      if (availableTimes.length === 0) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ No available slots were found. Try checking your calendar again later."
+        )
+        return
+      }
+
+      const slotList = availableTimes.map((t) => `- ${t}`).join("\n")
+      const emailBody =
+        `Hi,\n\n` +
+        `Thank you for getting back to me regarding the ${app.role} position.\n\n` +
+        `I'm available at the following times:\n\n` +
+        `${slotList}\n\n` +
+        `Please let me know which works best, and I'll confirm.\n\n` +
+        `Best regards`
+
+      const subject = `Re: ${app.role} at ${app.company}`
+
+      const pendingActionId = await ctx.runMutation(
+        internal.pendingActions.create,
+        {
+          userId: link.userId,
+          actionType: "send_email" as const,
+          payload: {
+            to: app.recipientEmail,
+            subject,
+            body: emailBody,
+            company: app.company,
+            role: app.role,
+            coverLetter: emailBody,
+          },
+          telegramChatId: chatId,
+          source: "telegram" as const,
+          applicationId: appId,
+        }
+      )
+
+      const preview =
+        emailBody.length > 500 ? emailBody.slice(0, 500) + "..." : emailBody
+
+      const result = (await sendMessage(
+        botToken,
+        chatId,
+        `📧 <b>Ready to send availability reply</b>\n\n` +
+          `<b>To:</b> ${escapeHtml(app.recipientEmail)}\n` +
+          `<b>Subject:</b> ${escapeHtml(subject)}\n\n` +
+          `<b>Preview:</b>\n${escapeHtml(preview)}`,
+        {
+          inline_keyboard: [
+            [
+              { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
+              { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
+            ],
+          ],
+        }
+      )) as { result?: { message_id?: number } }
+
+      if (result?.result?.message_id) {
+        await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
+          pendingActionId: pendingActionId as Id<"pendingActions">,
+          telegramMessageId: String(result.result.message_id),
+        })
+      }
+
+      // Clean up slots so repeated clicks don't create duplicates
+      await ctx.runMutation(internal.calendar.deleteCalendarSlots, {
+        id: slotsDoc._id,
+      })
+    } catch (err) {
+      console.error("[telegram] cal_reply failed:", err)
+      await sendMessage(
+        botToken,
+        chatId,
+        `❌ <b>Failed to prepare reply</b>\n\n${escapeHtml(String(err))}`
+      )
+    }
+
+  // ── Calendar: show slot picker for blocking time ──
+  } else if (data.startsWith("cal_block:")) {
+    const appId = data.replace("cal_block:", "") as Id<"applications">
+    try {
+      await answerCallbackQuery(botToken, callbackQuery.id)
+
+      const slotsDoc = await ctx.runQuery(internal.calendar.getCalendarSlots, {
+        applicationId: appId,
+        telegramChatId: chatId,
+      })
+
+      if (!slotsDoc || slotsDoc.slots.length === 0) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ No available slots to block. Tap below to refresh.",
+          {
+            inline_keyboard: [
+              [{ text: "📅 Check My Calendar", callback_data: `cal:${appId}` }],
+            ],
+          }
+        )
+        return
+      }
+
+      const buttons = slotsDoc.slots.map((s, i) => [
+        { text: `${i + 1}. ${s.label}`, callback_data: `cal_ev:${appId}:${i}` },
+      ])
+
+      await sendMessage(
+        botToken,
+        chatId,
+        "📅 <b>Select a slot to block on your calendar:</b>",
+        { inline_keyboard: buttons }
+      )
+    } catch (err) {
+      console.error("[telegram] cal_block failed:", err)
+      await sendMessage(
+        botToken,
+        chatId,
+        `❌ <b>Failed to show slots</b>\n\n${escapeHtml(String(err))}`
+      )
+    }
+
+  // ── Calendar: create event for selected slot ──
+  } else if (data.startsWith("cal_ev:")) {
+    const parts = data.replace("cal_ev:", "").split(":")
+    const appId = parts[0] as Id<"applications">
+    const slotIndex = parseInt(parts[1], 10)
+    try {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!link) {
+        await answerCallbackQuery(botToken, callbackQuery.id, "Account not linked.")
+        return
+      }
+      await answerCallbackQuery(botToken, callbackQuery.id)
+
+      const app = await ctx.runQuery(
+        internal.applications.internalGetById,
+        { id: appId }
+      )
+      if (!app) {
+        await sendMessage(botToken, chatId, "❌ Application not found.")
+        return
+      }
+
+      const slotsDoc = await ctx.runQuery(internal.calendar.getCalendarSlots, {
+        applicationId: appId,
+        telegramChatId: chatId,
+      })
+
+      if (!slotsDoc || !slotsDoc.slots[slotIndex]) {
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Slot no longer available. Tap below to refresh.",
+          {
+            inline_keyboard: [
+              [{ text: "📅 Check My Calendar", callback_data: `cal:${appId}` }],
+            ],
+          }
+        )
+        return
+      }
+
+      const slot = slotsDoc.slots[slotIndex]
+
+      await ctx.runAction(internal.calendar.createCalendarEvent, {
+        userId: link.userId,
+        summary: `Interview — ${app.company} (${app.role})`,
+        description: "Scheduled via AutoApply",
+        startTime: slot.start,
+        endTime: slot.end,
+      })
+
+      // Clean up stored slots
+      await ctx.runMutation(internal.calendar.deleteCalendarSlots, {
+        id: slotsDoc._id,
+      })
+
+      await sendMessage(
+        botToken,
+        chatId,
+        `✅ <b>Calendar event created!</b>\n\n` +
+          `<b>Interview — ${escapeHtml(app.company)} (${escapeHtml(app.role)})</b>\n` +
+          `${escapeHtml(slot.label)}`
+      )
+    } catch (err) {
+      console.error("[telegram] cal_ev failed:", err)
+      if (String(err).includes("MISSING_CALENDAR_SCOPE")) {
+        const permissionsUrl =
+          (process.env.NEXT_PUBLIC_SITE_URL ||
+            process.env.NEXT_PUBLIC_CONVEX_SITE_URL ||
+            "") + "/permissions"
+        await sendMessage(
+          botToken,
+          chatId,
+          `🔒 <b>Calendar access not enabled</b>\n\n` +
+            `Visit your permissions page to connect it:\n${permissionsUrl}`
+        )
+      } else {
+        await sendMessage(
+          botToken,
+          chatId,
+          `❌ <b>Failed to create event</b>\n\n${escapeHtml(String(err))}`
         )
       }
     }

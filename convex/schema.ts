@@ -137,4 +137,26 @@ export default defineSchema({
     salary: v.number(),
     createdAt: v.number(),
   }).index("by_telegramChatId", ["telegramChatId"]),
+
+  pendingCalendarSlots: defineTable({
+    applicationId: v.id("applications"),
+    telegramChatId: v.string(),
+    slots: v.array(
+      v.object({
+        label: v.string(),
+        start: v.string(),
+        end: v.string(),
+      })
+    ),
+    proposedTimeStatus: v.array(
+      v.object({
+        label: v.string(),
+        available: v.union(v.boolean(), v.null()),
+      })
+    ),
+    createdAt: v.number(),
+  }).index("by_applicationId_and_telegramChatId", [
+    "applicationId",
+    "telegramChatId",
+  ]),
 })

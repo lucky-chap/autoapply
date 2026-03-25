@@ -345,7 +345,7 @@ Return ONLY the JSON object.`
             (matchedStatus === "Interview" || (proposedTimes && proposedTimes.length > 0) || schedulingLink)
               ? {
                   inline_keyboard: [
-                    [{ text: "📅 Check My Calendar", callback_data: "calendar_check" }],
+                    [{ text: "📅 Check My Calendar", callback_data: `cal:${app._id}` }],
                   ],
                 }
               : undefined
