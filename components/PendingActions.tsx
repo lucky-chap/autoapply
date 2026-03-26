@@ -41,42 +41,42 @@ export function PendingActions({ userId }: { userId: string }) {
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-amber-100 bg-amber-50/50 shadow-sm">
-      <div className="border-b border-amber-100 p-6">
+    <section className="overflow-hidden rounded-3xl border border-black/15 bg-white">
+      <div className="border-b border-black/10 p-6">
         <div className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-amber-600" />
+          <Clock className="h-5 w-5 text-black/70" />
           <h2 className="font-display text-xl font-bold text-primary">
             Pending Approvals
           </h2>
-          <Badge className="bg-amber-100 text-amber-700 border-amber-200 border font-semibold">
+          <Badge className="border border-black/20 bg-[#b8ff66] font-semibold text-black">
             {pendingActions.length}
           </Badge>
         </div>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-black/60">
           These applications are waiting for your approval before sending.
         </p>
       </div>
-      <div className="divide-y divide-amber-100">
+      <div className="divide-y divide-black/10">
         {pendingActions.map((action) => (
           <div key={action._id} className="p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
-                  <p className="font-semibold text-primary truncate">
+                  <Building2 className="h-4 w-4 shrink-0 text-black/45" />
+                  <p className="truncate font-semibold text-primary">
                     {action.payload.company}
                   </p>
                 </div>
-                <p className="mt-0.5 text-sm text-gray-500">{action.payload.role}</p>
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
+                <p className="mt-0.5 text-sm text-black/60">{action.payload.role}</p>
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-black/45">
                   <Mail className="h-3 w-3" />
                   {action.payload.to}
                 </div>
-                <p className="mt-2 text-xs text-gray-500 line-clamp-2">
+                <p className="mt-2 line-clamp-2 text-xs text-black/60">
                   {action.payload.coverLetter}
                 </p>
                 {action.source === "telegram" && (
-                  <Badge className="mt-2 bg-blue-50 text-blue-600 border-blue-200 border text-[10px]">
+                  <Badge className="mt-2 border border-blue-200 bg-blue-50 text-[10px] text-blue-600">
                     via Telegram
                   </Badge>
                 )}
@@ -85,7 +85,7 @@ export function PendingActions({ userId }: { userId: string }) {
                 <button
                   onClick={() => handleApprove(action._id)}
                   disabled={loadingId === action._id}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-600 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#121212] px-3 py-2 text-xs font-bold text-white transition-all hover:bg-black disabled:opacity-50"
                 >
                   {loadingId === action._id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -97,7 +97,7 @@ export function PendingActions({ userId }: { userId: string }) {
                 <button
                   onClick={() => handleReject(action._id)}
                   disabled={loadingId === action._id}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600 transition-all hover:bg-gray-50 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-black/20 bg-white px-3 py-2 text-xs font-bold text-black/65 transition-all hover:bg-white disabled:opacity-50"
                 >
                   <XCircle className="h-3.5 w-3.5" />
                   Reject

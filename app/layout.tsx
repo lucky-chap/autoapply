@@ -1,25 +1,30 @@
-import { Roboto, Montserrat, PT_Mono } from "next/font/google"
+import { Manrope, Sora, IBM_Plex_Mono } from "next/font/google"
+import type { Metadata } from "next"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import { Auth0Provider } from "@auth0/nextjs-auth0/client"
 import { auth0 } from "@/lib/auth0"
 import { ConvexClientProvider } from "@/components/ConvexClientProvider"
-import { Navbar } from "@/components/navbar"
 
-const roboto = Roboto({
-  weight: ["100", "300", "400", "500", "700", "900"],
+export const metadata: Metadata = {
+  title: "AutoApply — AI Agent That Actually Applies For You",
+  description:
+    "Upload your CV, paste a job description, and let AutoApply draft personalized cover letters and send them via your own Gmail account.",
+}
+
+const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-sans",
 })
 
-const montserrat = Montserrat({
+const sora = Sora({
   subsets: ["latin"],
   variable: "--font-display",
 })
 
-const fontMono = PT_Mono({
-  weight: "400",
+const fontMono = IBM_Plex_Mono({
+  weight: ["400", "500"],
   subsets: ["latin"],
   variable: "--font-mono",
 })
@@ -37,8 +42,8 @@ export default async function RootLayout({
       suppressHydrationWarning
       className={cn(
         "antialiased",
-        roboto.variable,
-        montserrat.variable,
+        manrope.variable,
+        sora.variable,
         fontMono.variable,
         "font-sans"
       )}
@@ -47,10 +52,7 @@ export default async function RootLayout({
         <Auth0Provider user={session?.user}>
           <ConvexClientProvider>
             <ThemeProvider>
-              <Navbar />
-              <main className="min-h-[calc(100vh-64px)] bg-background">
-                {children}
-              </main>
+              <main className="min-h-screen bg-white">{children}</main>
             </ThemeProvider>
           </ConvexClientProvider>
         </Auth0Provider>
