@@ -85,6 +85,12 @@ function toBase64Url(str: string): string {
     .replace(/=+$/, "")
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  return btoa(
+    Array.from(bytes, (b) => String.fromCharCode(b)).join("")
+  )
+}
+
 // ── Email encoding (same logic as lib/gmail.ts) ──
 
 function encodeSubject(subject: string): string {
@@ -94,18 +100,26 @@ function encodeSubject(subject: string): string {
   return subject
 }
 
+interface Attachment {
+  filename: string
+  mimeType: string
+  data: Uint8Array
+}
+
 function encodeEmail({
   to,
   subject,
   body,
   from,
   trackingPixelUrl,
+  attachments,
 }: {
   to: string
   subject: string
   body: string
   from?: { name: string; email: string }
   trackingPixelUrl?: string
+  attachments?: Attachment[]
 }): string {
   const encodedSubject = encodeSubject(subject)
   const fromHeader = from ? `From: ${from.name} <${from.email}>` : ""
@@ -114,9 +128,12 @@ function encodeEmail({
     ...(fromHeader ? [fromHeader] : []),
     `To: ${to}`,
     `Subject: ${encodedSubject}`,
+    `MIME-Version: 1.0`,
   ]
 
-  if (!trackingPixelUrl) {
+  const hasAttachments = attachments && attachments.length > 0
+
+  if (!trackingPixelUrl && !hasAttachments) {
     const rawEmail = [
       ...headers,
       `Content-Type: text/plain; charset="UTF-8"`,
@@ -126,29 +143,71 @@ function encodeEmail({
     return toBase64Url(rawEmail)
   }
 
-  const boundary = "----autoapply_boundary"
+  const mixedBoundary = "----autoapply_mixed"
+  const altBoundary = "----autoapply_alt"
+
   const htmlBody = body
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/\n/g, "<br>")
 
-  const rawEmail = [
-    ...headers,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
+  const trackingImg = trackingPixelUrl
+    ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" />`
+    : ""
+
+  // Build the text/html alternative part
+  const altPart = [
+    `--${altBoundary}`,
     `Content-Type: text/plain; charset="UTF-8"`,
     "",
     body,
     "",
-    `--${boundary}`,
+    `--${altBoundary}`,
     `Content-Type: text/html; charset="UTF-8"`,
     "",
-    `<html><body><div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#333">${htmlBody}</div><img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body></html>`,
+    `<html><body><div style="font-family:sans-serif;font-size:14px;line-height:1.6;color:#333">${htmlBody}</div>${trackingImg}</body></html>`,
     "",
-    `--${boundary}--`,
+    `--${altBoundary}--`,
+  ].join("\n")
+
+  if (!hasAttachments) {
+    const rawEmail = [
+      ...headers,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      "",
+      altPart,
+    ].join("\n")
+    return toBase64Url(rawEmail)
+  }
+
+  // With attachments: use multipart/mixed wrapping multipart/alternative + attachment parts
+  const attachmentParts = attachments!.map((att) => {
+    const b64 = bytesToBase64(att.data)
+    // Split base64 into 76-char lines for MIME compliance
+    const lines = b64.match(/.{1,76}/g) || [b64]
+    return [
+      `--${mixedBoundary}`,
+      `Content-Type: ${att.mimeType}; name="${att.filename}"`,
+      `Content-Disposition: attachment; filename="${att.filename}"`,
+      `Content-Transfer-Encoding: base64`,
+      "",
+      ...lines,
+    ].join("\n")
+  })
+
+  const rawEmail = [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
+    "",
+    `--${mixedBoundary}`,
+    `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    "",
+    altPart,
+    "",
+    ...attachmentParts,
+    "",
+    `--${mixedBoundary}--`,
   ].join("\n")
 
   return toBase64Url(rawEmail)
@@ -168,8 +227,17 @@ async function createPendingActionAndPreview(
     company: string
     role: string
     coverLetter: string
-  }
+  },
+  options?: { applicationId?: Id<"applications">; attachResume?: boolean }
 ) {
+  // Check if user has a resume uploaded
+  const profile = await ctx.runQuery(
+    internal.resumeProfiles.getByUserInternal,
+    { userId }
+  )
+  const hasResume = !!profile?.fileId
+  const attachResume = hasResume && (options?.attachResume ?? true)
+
   const pendingActionId = await ctx.runMutation(
     internal.pendingActions.create,
     {
@@ -178,6 +246,8 @@ async function createPendingActionAndPreview(
       payload,
       telegramChatId: chatId,
       source: "telegram" as const,
+      applicationId: options?.applicationId,
+      attachResume,
     }
   )
 
@@ -186,25 +256,30 @@ async function createPendingActionAndPreview(
       ? payload.coverLetter.slice(0, 500) + "..."
       : payload.coverLetter
 
+  const attachLabel = attachResume ? "📎 Resume: ON" : "📎 Resume: OFF"
+  const buttons: { text: string; callback_data: string }[][] = [
+    [
+      { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
+      { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
+    ],
+  ]
+  if (hasResume) {
+    buttons.push([
+      { text: attachLabel, callback_data: `toggle_resume:${pendingActionId}` },
+    ])
+  }
+
+  const attachLine = attachResume ? "\n📎 <b>Resume will be attached</b>" : ""
+
   const result = (await sendMessage(
     botToken,
     chatId,
     `📧 <b>Ready to send application</b>\n\n` +
       `<b>Company:</b> ${escapeHtml(payload.company)}\n` +
       `<b>Role:</b> ${escapeHtml(payload.role)}\n` +
-      `<b>To:</b> ${escapeHtml(payload.to)}\n\n` +
+      `<b>To:</b> ${escapeHtml(payload.to)}${attachLine}\n\n` +
       `<b>Cover Letter Preview:</b>\n${escapeHtml(preview)}`,
-    {
-      inline_keyboard: [
-        [
-          {
-            text: "✅ Approve & Send",
-            callback_data: `approve:${pendingActionId}`,
-          },
-          { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-        ],
-      ],
-    }
+    { inline_keyboard: buttons }
   )) as { result?: { message_id?: number } }
 
   if (result?.result?.message_id) {
@@ -1170,6 +1245,13 @@ async function handleCallbackQuery(
 
       const subject = `Re: ${app.role} at ${app.company}`
 
+      // Check if user has a resume to attach
+      const profile = await ctx.runQuery(
+        internal.resumeProfiles.getByUserInternal,
+        { userId: link.userId }
+      )
+      const hasResume = !!profile?.fileId
+
       const pendingActionId = await ctx.runMutation(
         internal.pendingActions.create,
         {
@@ -1186,27 +1268,35 @@ async function handleCallbackQuery(
           telegramChatId: chatId,
           source: "telegram" as const,
           applicationId: appId,
+          attachResume: hasResume,
         }
       )
 
       const preview =
         emailBody.length > 500 ? emailBody.slice(0, 500) + "..." : emailBody
 
+      const replyButtons: { text: string; callback_data: string }[][] = [
+        [
+          { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
+          { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
+        ],
+      ]
+      if (hasResume) {
+        replyButtons.push([
+          { text: "📎 Resume: ON", callback_data: `toggle_resume:${pendingActionId}` },
+        ])
+      }
+
+      const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
+
       const result = (await sendMessage(
         botToken,
         chatId,
         `📧 <b>Ready to send availability reply</b>\n\n` +
           `<b>To:</b> ${escapeHtml(app.recipientEmail)}\n` +
-          `<b>Subject:</b> ${escapeHtml(subject)}\n\n` +
+          `<b>Subject:</b> ${escapeHtml(subject)}${attachLine}\n\n` +
           `<b>Preview:</b>\n${escapeHtml(preview)}`,
-        {
-          inline_keyboard: [
-            [
-              { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-              { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-            ],
-          ],
-        }
+        { inline_keyboard: replyButtons }
       )) as { result?: { message_id?: number } }
 
       if (result?.result?.message_id) {
@@ -1332,13 +1422,78 @@ async function handleCallbackQuery(
         id: slotsDoc._id,
       })
 
-      await sendMessage(
+      // Compose availability reply email for the blocked slot
+      const emailBody =
+        `Hi,\n\n` +
+        `Thank you for getting back to me regarding the ${app.role} position.\n\n` +
+        `I'd like to confirm my availability for:\n\n` +
+        `- ${slot.label}\n\n` +
+        `Please let me know if this works, and I'll be happy to confirm.\n\n` +
+        `Best regards`
+
+      const subject = `Re: ${app.role} at ${app.company}`
+
+      // Check if user has a resume
+      const profile = await ctx.runQuery(
+        internal.resumeProfiles.getByUserInternal,
+        { userId: link.userId }
+      )
+      const hasResume = !!profile?.fileId
+
+      const pendingActionId = await ctx.runMutation(
+        internal.pendingActions.create,
+        {
+          userId: link.userId,
+          actionType: "send_email" as const,
+          payload: {
+            to: app.recipientEmail,
+            subject,
+            body: emailBody,
+            company: app.company,
+            role: app.role,
+            coverLetter: emailBody,
+          },
+          telegramChatId: chatId,
+          source: "telegram" as const,
+          applicationId: appId,
+          attachResume: hasResume,
+        }
+      )
+
+      const replyButtons: { text: string; callback_data: string }[][] = [
+        [
+          { text: "✅ Send to Recruiter", callback_data: `approve:${pendingActionId}` },
+          { text: "❌ Skip", callback_data: `reject:${pendingActionId}` },
+        ],
+      ]
+      if (hasResume) {
+        replyButtons.push([
+          { text: "📎 Resume: ON", callback_data: `toggle_resume:${pendingActionId}` },
+        ])
+      }
+
+      const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
+      const preview =
+        emailBody.length > 500 ? emailBody.slice(0, 500) + "..." : emailBody
+
+      const result = (await sendMessage(
         botToken,
         chatId,
         `✅ <b>Calendar event created!</b>\n\n` +
           `<b>Interview — ${escapeHtml(app.company)} (${escapeHtml(app.role)})</b>\n` +
-          `${escapeHtml(slot.label)}`
-      )
+          `${escapeHtml(slot.label)}\n\n` +
+          `📧 <b>Notify the recruiter?</b>\n` +
+          `<b>To:</b> ${escapeHtml(app.recipientEmail)}${attachLine}\n\n` +
+          `<b>Preview:</b>\n${escapeHtml(preview)}`,
+        { inline_keyboard: replyButtons }
+      )) as { result?: { message_id?: number } }
+
+      if (result?.result?.message_id) {
+        await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
+          pendingActionId: pendingActionId as Id<"pendingActions">,
+          telegramMessageId: String(result.result.message_id),
+        })
+      }
     } catch (err) {
       console.error("[telegram] cal_ev failed:", err)
       if (String(err).includes("MISSING_CALENDAR_SCOPE")) {
@@ -1359,6 +1514,49 @@ async function handleCallbackQuery(
           `❌ <b>Failed to create event</b>\n\n${escapeHtml(String(err))}`
         )
       }
+    }
+
+  // ── Toggle resume attachment on pending action ──
+  } else if (data.startsWith("toggle_resume:")) {
+    const actionId = data.replace("toggle_resume:", "") as Id<"pendingActions">
+    try {
+      const newValue: boolean | null = await ctx.runMutation(
+        internal.pendingActions.toggleAttachResume,
+        { id: actionId }
+      )
+      if (newValue === null) {
+        await answerCallbackQuery(botToken, callbackQuery.id, "Action expired.")
+        return
+      }
+
+      const label = newValue ? "📎 Resume: ON" : "📎 Resume: OFF"
+      await answerCallbackQuery(
+        botToken,
+        callbackQuery.id,
+        newValue ? "Resume will be attached" : "Resume removed"
+      )
+
+      // Update the inline keyboard on the existing message
+      if (callbackQuery.message?.message_id) {
+        await sendTelegram(botToken, "editMessageReplyMarkup", {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ Approve & Send", callback_data: `approve:${actionId}` },
+                { text: "❌ Reject", callback_data: `reject:${actionId}` },
+              ],
+              [
+                { text: label, callback_data: `toggle_resume:${actionId}` },
+              ],
+            ],
+          },
+        })
+      }
+    } catch (err) {
+      console.error("[telegram] toggle_resume failed:", err)
+      await answerCallbackQuery(botToken, callbackQuery.id, "Failed to toggle.")
     }
   }
 }
@@ -1425,6 +1623,34 @@ export const executeApprovedAction = internalAction({
         ? `${convexSiteUrl}/track/open?id=${applicationId}`
         : undefined
 
+      // Fetch resume attachment if requested
+      const attachments: Attachment[] = []
+      if (action.attachResume) {
+        const profile = await ctx.runQuery(
+          internal.resumeProfiles.getByUserInternal,
+          { userId: action.userId }
+        )
+        if (profile?.fileId) {
+          const fileUrl = await ctx.storage.getUrl(profile.fileId)
+          if (fileUrl) {
+            const fileRes = await fetch(fileUrl)
+            if (fileRes.ok) {
+              const arrayBuf = await fileRes.arrayBuffer()
+              const contentType = fileRes.headers.get("content-type") || "application/pdf"
+              const ext = contentType.includes("pdf") ? "pdf" : "docx"
+              const name = senderInfo
+                ? `${senderInfo.name.replace(/\s+/g, "_")}_Resume.${ext}`
+                : `Resume.${ext}`
+              attachments.push({
+                filename: name,
+                mimeType: contentType,
+                data: new Uint8Array(arrayBuf),
+              })
+            }
+          }
+        }
+      }
+
       // Encode and send email
       const encodedEmail = encodeEmail({
         to: action.payload.to,
@@ -1432,6 +1658,7 @@ export const executeApprovedAction = internalAction({
         body: action.payload.body,
         from: senderInfo ?? undefined,
         trackingPixelUrl,
+        attachments: attachments.length > 0 ? attachments : undefined,
       })
 
       const gmailBody: { raw: string; threadId?: string } = {
@@ -1547,7 +1774,7 @@ export const sendNotification = internalAction({
   },
   handler: async (_ctx, { chatId, text, replyMarkup }) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN!
-    await sendMessage(botToken, chatId, text, replyMarkup)
+    return await sendMessage(botToken, chatId, text, replyMarkup)
   },
 })
 

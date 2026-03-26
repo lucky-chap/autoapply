@@ -2,6 +2,7 @@ import { internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { getGmailTokenViaTokenVault, TokenVaultError } from "./tokenVault"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
+import { analyzeAvailability, parseProposedTime } from "./calendar"
 
 // Decode base64url to UTF-8 string (Convex runtime has no Node Buffer)
 function fromBase64Url(data: string): string {
@@ -320,7 +321,6 @@ Return ONLY the JSON object.`
             : "\n\n<i>No action needed on your part.</i>"
 
           // Scheduling info
-          // Show scheduling info if present, regardless of AI status classification
           let schedulingAlert = ""
           if (schedulingLink) {
             schedulingAlert = `\n\n📅 <b>Schedule here:</b> ${schedulingLink}`
@@ -341,20 +341,253 @@ Return ONLY the JSON object.`
             }
           }
 
-          const replyMarkup =
-            (matchedStatus === "Interview" || (proposedTimes && proposedTimes.length > 0) || schedulingLink)
-              ? {
-                  inline_keyboard: [
-                    [{ text: "📅 Check My Calendar", callback_data: `cal:${app._id}` }],
-                  ],
-                }
-              : undefined
+          // ── Smart auto-scheduling for Interview status ──
+          let notificationSent = false
 
-          await ctx.runAction(internal.telegram.sendNotification, {
-            chatId: telegramLink.telegramChatId,
-            text: `${emoji} <b>${app.company}</b> update for <b>${app.role}</b>\n\n${statusLine}${summaryLine}${salaryAlert}${schedulingAlert}${actionLine}`,
-            replyMarkup,
-          })
+          if (matchedStatus === "Interview") {
+            try {
+              const now = new Date()
+              const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+              const calEvents = await ctx.runAction(internal.calendar.getCalendarConflicts, {
+                userId: app.userId,
+                startTime: now.toISOString(),
+                endTime: sevenDaysLater.toISOString(),
+              })
+
+              const availability = analyzeAvailability(
+                calEvents,
+                proposedTimes,
+                now,
+                sevenDaysLater
+              )
+
+              // Check if user has a resume
+              const profile = await ctx.runQuery(
+                internal.resumeProfiles.getByUserInternal,
+                { userId: app.userId }
+              )
+              const hasResume = !!profile?.fileId
+
+              const availableProposed = availability.proposedTimeStatus.filter(
+                (pt) => pt.available === true
+              )
+
+              if (availableProposed.length > 0) {
+                // ── Scenario A: Recruiter proposed dates, at least one is free ──
+                const firstAvailable = availableProposed[0]
+                const parsedTime = parseProposedTime(firstAvailable.label, now)
+
+                if (parsedTime) {
+                  const startTime = parsedTime.toISOString()
+                  const endTime = new Date(parsedTime.getTime() + 60 * 60 * 1000).toISOString()
+
+                  // Create calendar event
+                  await ctx.runAction(internal.calendar.createCalendarEvent, {
+                    userId: app.userId,
+                    summary: `Interview — ${app.company} (${app.role})`,
+                    description: "Auto-scheduled via AutoApply",
+                    startTime,
+                    endTime,
+                  })
+
+                  // Compose confirmation email
+                  const emailBody =
+                    `Hi,\n\n` +
+                    `Thank you for reaching out regarding the ${app.role} position.\n\n` +
+                    `I'd like to confirm that ${firstAvailable.label} works for me.\n\n` +
+                    `Please let me know if there's anything I should prepare.\n\n` +
+                    `Best regards`
+                  const subject = `Re: ${app.role} at ${app.company}`
+
+                  const pendingActionId = await ctx.runMutation(
+                    internal.pendingActions.create,
+                    {
+                      userId: app.userId,
+                      actionType: "send_email" as const,
+                      payload: {
+                        to: app.recipientEmail,
+                        subject,
+                        body: emailBody,
+                        company: app.company,
+                        role: app.role,
+                        coverLetter: emailBody,
+                      },
+                      telegramChatId: telegramLink.telegramChatId,
+                      source: "telegram" as const,
+                      applicationId: app._id,
+                      attachResume: hasResume,
+                    }
+                  )
+
+                  const preview = emailBody.length > 400 ? emailBody.slice(0, 400) + "..." : emailBody
+                  const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
+
+                  const buttons: { text: string; callback_data: string }[][] = [
+                    [
+                      { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
+                      { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
+                    ],
+                  ]
+                  if (hasResume) {
+                    buttons.push([
+                      { text: "📎 Resume: ON", callback_data: `toggle_resume:${pendingActionId}` },
+                    ])
+                  }
+                  buttons.push([
+                    { text: "📅 Check My Calendar", callback_data: `cal:${app._id}` },
+                  ])
+
+                  const msg =
+                    `📅 <b>${app.company}</b> — Interview for <b>${app.role}</b>\n\n` +
+                    `${statusLine}${summaryLine}\n\n` +
+                    `✅ <b>${firstAvailable.label}</b> is available!\n` +
+                    `📅 Calendar event created.\n\n` +
+                    `📧 <b>Draft reply to recruiter:</b>\n` +
+                    `<b>To:</b> ${app.recipientEmail}\n` +
+                    `<b>Subject:</b> ${subject}${attachLine}\n\n` +
+                    `${preview}`
+
+                  const result = (await ctx.runAction(internal.telegram.sendNotification, {
+                    chatId: telegramLink.telegramChatId,
+                    text: msg,
+                    replyMarkup: { inline_keyboard: buttons },
+                  })) as { result?: { message_id?: number } }
+
+                  if (result?.result?.message_id) {
+                    await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
+                      pendingActionId,
+                      telegramMessageId: String(result.result.message_id),
+                    })
+                  }
+
+                  notificationSent = true
+                }
+              }
+
+              if (!notificationSent) {
+                // ── Scenario B: No proposed dates, or none available ──
+                // Store slots for cal_block usage
+                await ctx.runMutation(internal.calendar.upsertCalendarSlots, {
+                  applicationId: app._id,
+                  telegramChatId: telegramLink.telegramChatId,
+                  slots: availability.suggestedSlots,
+                  proposedTimeStatus: availability.proposedTimeStatus,
+                })
+
+                const availableTimes: string[] = [
+                  ...availability.proposedTimeStatus
+                    .filter((pt) => pt.available === true)
+                    .map((pt) => pt.label),
+                  ...availability.suggestedSlots.map((s) => s.label),
+                ]
+
+                if (availableTimes.length > 0) {
+                  const slotList = availableTimes.map((t) => `- ${t}`).join("\n")
+                  const emailBody =
+                    `Hi,\n\n` +
+                    `Thank you for getting back to me regarding the ${app.role} position.\n\n` +
+                    `I'm available at the following times:\n\n` +
+                    `${slotList}\n\n` +
+                    `Please let me know which works best, and I'll confirm.\n\n` +
+                    `Best regards`
+                  const subject = `Re: ${app.role} at ${app.company}`
+
+                  const pendingActionId = await ctx.runMutation(
+                    internal.pendingActions.create,
+                    {
+                      userId: app.userId,
+                      actionType: "send_email" as const,
+                      payload: {
+                        to: app.recipientEmail,
+                        subject,
+                        body: emailBody,
+                        company: app.company,
+                        role: app.role,
+                        coverLetter: emailBody,
+                      },
+                      telegramChatId: telegramLink.telegramChatId,
+                      source: "telegram" as const,
+                      applicationId: app._id,
+                      attachResume: hasResume,
+                    }
+                  )
+
+                  const preview = emailBody.length > 400 ? emailBody.slice(0, 400) + "..." : emailBody
+                  const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
+
+                  const buttons: { text: string; callback_data: string }[][] = [
+                    [
+                      { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
+                      { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
+                    ],
+                  ]
+                  if (hasResume) {
+                    buttons.push([
+                      { text: "📎 Resume: ON", callback_data: `toggle_resume:${pendingActionId}` },
+                    ])
+                  }
+                  buttons.push([
+                    { text: "📅 Block Time", callback_data: `cal_block:${app._id}` },
+                    { text: "📅 Check My Calendar", callback_data: `cal:${app._id}` },
+                  ])
+
+                  // Show conflicting proposed times if any
+                  let conflictInfo = ""
+                  const conflicts = availability.proposedTimeStatus.filter(
+                    (pt) => pt.available === false
+                  )
+                  if (conflicts.length > 0) {
+                    conflictInfo = `\n\n❌ <b>Conflicting proposed times:</b>\n` +
+                      conflicts.map((c) => `- ${c.label}`).join("\n")
+                  }
+
+                  const msg =
+                    `📅 <b>${app.company}</b> — Interview for <b>${app.role}</b>\n\n` +
+                    `${statusLine}${summaryLine}${conflictInfo}\n\n` +
+                    `📧 <b>Draft availability reply:</b>\n` +
+                    `<b>To:</b> ${app.recipientEmail}\n` +
+                    `<b>Subject:</b> ${subject}${attachLine}\n\n` +
+                    `${preview}`
+
+                  const result = (await ctx.runAction(internal.telegram.sendNotification, {
+                    chatId: telegramLink.telegramChatId,
+                    text: msg,
+                    replyMarkup: { inline_keyboard: buttons },
+                  })) as { result?: { message_id?: number } }
+
+                  if (result?.result?.message_id) {
+                    await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
+                      pendingActionId,
+                      telegramMessageId: String(result.result.message_id),
+                    })
+                  }
+
+                  notificationSent = true
+                }
+              }
+            } catch (err) {
+              console.error("[inboxChecker] Auto-scheduling failed, falling back:", err)
+            }
+          }
+
+          // ── Default notification (non-Interview, or auto-scheduling failed) ──
+          if (!notificationSent) {
+            const replyMarkup =
+              (matchedStatus === "Interview" || (proposedTimes && proposedTimes.length > 0) || schedulingLink)
+                ? {
+                    inline_keyboard: [
+                      [{ text: "📅 Check My Calendar", callback_data: `cal:${app._id}` }],
+                    ],
+                  }
+                : undefined
+
+            await ctx.runAction(internal.telegram.sendNotification, {
+              chatId: telegramLink.telegramChatId,
+              text: `${emoji} <b>${app.company}</b> update for <b>${app.role}</b>\n\n${statusLine}${summaryLine}${salaryAlert}${schedulingAlert}${actionLine}`,
+              replyMarkup,
+            })
+          }
         }
       }
     }

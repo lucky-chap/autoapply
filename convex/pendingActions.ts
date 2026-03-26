@@ -23,6 +23,7 @@ export const create = internalMutation({
     telegramChatId: v.optional(v.string()),
     source: v.union(v.literal("telegram"), v.literal("web")),
     applicationId: v.optional(v.id("applications")),
+    attachResume: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("pendingActions", {
@@ -167,6 +168,17 @@ export const setTelegramMessageId = internalMutation({
   },
   handler: async (ctx, { pendingActionId, telegramMessageId }) => {
     await ctx.db.patch(pendingActionId, { telegramMessageId })
+  },
+})
+
+export const toggleAttachResume = internalMutation({
+  args: { id: v.id("pendingActions") },
+  handler: async (ctx, { id }) => {
+    const action = await ctx.db.get(id)
+    if (!action || action.status !== "pending") return null
+    const newValue = !action.attachResume
+    await ctx.db.patch(id, { attachResume: newValue })
+    return newValue
   },
 })
 

@@ -59,14 +59,11 @@ This project uses the Auth0 Token Vault and My Account API for secure connection
    - Click **"Enable"** to activate the Gmail API
    - This only needs to be done once — all users authenticate through your project
 
-10. **Enable Refresh Token Rotation** (Recommended):
+10. **Refresh Token Expiration** (Recommended):
     - In your Auth0 App Settings, find the **Refresh Token Expiration** section:
       - Toggle **Set Idle Refresh Token Lifetime** to `Enabled` and set it to `1209600` (14 days).
       - Toggle **Set Maximum Refresh Token Lifetime** to `Enabled` and set it to `2592000` (30 days).
-    - Find the **Refresh Token Rotation** section:
-      - Toggle **Rotation** to `Enabled`.
-      - Set **Rotation Overlap Period** to `60` seconds.
-    - Our system in `convex/tokenVault.ts` handles this rotation automatically to ensure continuous background service.
+    - **Important**: Keep **Refresh Token Rotation** set to **Disabled** (required for Token Vault — see step 4).
 
 11. **Publish Google OAuth App**:
 
@@ -203,10 +200,38 @@ Without this, Google access tokens expire after ~1 hour and background operation
 
 ### How it works
 
-1. When a user interacts with the web app (sends an application or links Telegram), their Auth0 **refresh token** is stored in Convex
-2. When the backend needs a Google token, it exchanges that refresh token at Auth0's `/oauth/token` endpoint using the Token Vault grant type
-3. Auth0 uses its stored Google credentials to return a **fresh** Google access token
-4. The backend uses the fresh token to call the Gmail API
+1. When a user interacts with the web app (sends an application or links Telegram), their **Auth0 refresh token** is captured and stored encrypted in Convex (`userTokens` table)
+2. When the backend needs a Google token, it calls `getGmailTokenViaTokenVault()` which first checks for a **cached Google access token** — if still valid (with a 5-minute buffer), it returns it immediately without calling Auth0
+3. If no cached token or it's expired, the function exchanges the Auth0 refresh token at Auth0's `/oauth/token` endpoint using the Token Vault grant type
+4. Auth0's Token Vault manages Google's refresh tokens server-side — we never see or store them. Auth0 uses its stored Google credentials to return a **fresh Google access token** (~1 hour validity)
+5. The fresh token is encrypted and cached in Convex (`cachedAccessToken` + `accessTokenExpiresAt` fields) for reuse
+6. The backend uses the token to call Gmail/Calendar APIs
+
+### Token lifecycle
+
+```
+User logs in → Auth0 refresh token captured → stored encrypted in Convex
+                                                      │
+                                                      ▼
+Cron/Telegram needs Google API → getGmailTokenViaTokenVault()
+                                        │
+                                        ├─ Cached token valid? → return it (no Auth0 call)
+                                        │
+                                        └─ Expired/missing? → Auth0 Token Vault exchange
+                                                                    │
+                                                                    ▼
+                                              Auth0 manages Google refresh token internally
+                                              Returns fresh Google access token (~1h)
+                                                                    │
+                                                                    ▼
+                                              Cache encrypted in Convex → return to caller
+```
+
+**Key points:**
+- The **Auth0 refresh token** is long-lived and only changes if the user logs in again. It's our "ticket" to request Google tokens.
+- **Google's refresh token** is managed entirely by Auth0's Token Vault server-side — we never see it.
+- The **Google access token** is the short-lived token (~1h) we cache to avoid calling Auth0 on every cron cycle (every 5 minutes per user).
+- Token Vault **requires refresh token rotation to be OFF** on the Auth0 app. Auth0 recommends DPoP as the alternative security mechanism.
 
 ### Setup
 
@@ -260,8 +285,8 @@ High-stakes transactions (sending an email via your real Gmail account) are prot
 
 To satisfy the "Security Model" criteria, all persistent tokens required for background agents are protected with:
 
-- **Encryption at Rest**: AES-256-GCM using a server-side `ENCRYPTION_SECRET`.
-- **Automatic Rotation**: The system proactively catches and saves new Refresh Tokens returned by **Auth0's Refresh Token Rotation** during background exchanges.
+- **Encryption at Rest**: AES-256-GCM using a server-side `ENCRYPTION_SECRET`. Both the stored Auth0 refresh token and the cached Google access token are encrypted.
+- **Access Token Caching**: Google access tokens are cached (encrypted) with their expiry to minimize Auth0 Token Vault API calls. The cache is refreshed 5 minutes before expiry to prevent mid-use token expiration.
 
 **Why not just use Auth0 + Convex Session Auth?**
 Even if Convex is configured to recognize your Auth0 `ID Token` natively, that token is short-lived (usually 1 hour). More importantly, it is only available when a user is actively sending a request from their browser. Processes like **Telegram Webhooks** and **Background Crons** do not have access to your browser's Auth0 session.
@@ -273,10 +298,10 @@ Removing storage entirely would mean the Telegram bot and Cron jobs could never 
 
 To mitigate the risk of storing these "Master Keys":
 
-- **Encryption at Rest**: Every Auth0 Refresh Token is encrypted using **AES-256-GCM** before being saved to Convex.
+- **Encryption at Rest**: Both the Auth0 refresh token and cached Google access token are encrypted using **AES-256-GCM** before being saved to Convex.
 - **Environment Isolation**: The decryption key (`ENCRYPTION_SECRET`) is never stored in the database; it only exists as a server-side environment variable.
-- **Scope Limitation**: The tokens only grant the specific permissions (`gmail.send`, etc.) authorized by the user, not full account access.
-- **Automatic Rotation Handling**: Many modern OAuth 2.0 implementations (including Auth0) use **Refresh Token Rotation**. Our system in `convex/tokenVault.ts` is designed to capture, re-encrypt, and save any new refresh tokens issued during a background exchange, ensuring continuous service without user intervention.
+- **Scope Limitation**: The tokens only grant the specific permissions (`gmail.send`, `gmail.readonly`, `calendar`) authorized by the user, not full account access.
+- **Token Vault Delegation**: Google's refresh token is never exposed to our application — Auth0's Token Vault manages it server-side. We only store the Auth0 refresh token (our "ticket" to request Google access tokens) and cache the short-lived Google access tokens.
 
 ===
 

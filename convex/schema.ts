@@ -73,6 +73,8 @@ export default defineSchema({
   userTokens: defineTable({
     userId: v.string(),
     auth0RefreshToken: v.string(),
+    cachedAccessToken: v.optional(v.string()),
+    accessTokenExpiresAt: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
@@ -100,6 +102,7 @@ export default defineSchema({
     resolvedAt: v.optional(v.number()),
     error: v.optional(v.string()),
     applicationId: v.optional(v.id("applications")),
+    attachResume: v.optional(v.boolean()),
     createdAt: v.number(),
   }).index("by_userId_and_status", ["userId", "status"]),
 

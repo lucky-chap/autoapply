@@ -37,3 +37,40 @@ export const getRefreshToken = internalQuery({
     return doc?.auth0RefreshToken ?? null
   },
 })
+
+export const getCachedToken = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    const doc = await ctx.db
+      .query("userTokens")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first()
+    if (!doc) return null
+    return {
+      auth0RefreshToken: doc.auth0RefreshToken,
+      cachedAccessToken: doc.cachedAccessToken ?? null,
+      accessTokenExpiresAt: doc.accessTokenExpiresAt ?? null,
+    }
+  },
+})
+
+export const updateCachedAccessToken = internalMutation({
+  args: {
+    userId: v.string(),
+    cachedAccessToken: v.string(),
+    accessTokenExpiresAt: v.number(),
+  },
+  handler: async (ctx, { userId, cachedAccessToken, accessTokenExpiresAt }) => {
+    const existing = await ctx.db
+      .query("userTokens")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first()
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        cachedAccessToken,
+        accessTokenExpiresAt,
+        updatedAt: Date.now(),
+      })
+    }
+  },
+})

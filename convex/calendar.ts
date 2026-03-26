@@ -33,7 +33,7 @@ export interface AvailabilityResult {
   suggestedSlots: SlotInfo[]
 }
 
-function parseProposedTime(timeStr: string, referenceDate: Date): Date | null {
+export function parseProposedTime(timeStr: string, referenceDate: Date): Date | null {
   // Try direct Date.parse first
   const direct = Date.parse(timeStr)
   if (!isNaN(direct)) return new Date(direct)
