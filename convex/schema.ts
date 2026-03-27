@@ -184,4 +184,37 @@ export default defineSchema({
     "applicationId",
     "telegramChatId",
   ]),
+
+  jobListings: defineTable({
+    externalId: v.string(),
+    source: v.string(),
+    title: v.string(),
+    company: v.string(),
+    description: v.string(),
+    url: v.string(),
+    location: v.string(),
+    salary: v.optional(v.string()),
+    category: v.optional(v.string()),
+    postedAt: v.optional(v.number()),
+    fetchedAt: v.number(),
+  })
+    .index("by_source_and_externalId", ["source", "externalId"])
+    .index("by_fetchedAt", ["fetchedAt"]),
+
+  userJobMatches: defineTable({
+    userId: v.string(),
+    jobListingId: v.id("jobListings"),
+    status: v.union(
+      v.literal("new"),
+      v.literal("ignored"),
+      v.literal("approved"),
+      v.literal("applied")
+    ),
+    matchScore: v.optional(v.number()),
+    matchReasoning: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId_and_status", ["userId", "status"])
+    .index("by_userId_and_jobListingId", ["userId", "jobListingId"]),
 })

@@ -22,6 +22,7 @@ import { PendingActions } from "@/components/PendingActions"
 import { TelegramLinkCard } from "@/components/TelegramLinkCard"
 import { TelegramLinkedDialog } from "@/components/TelegramLinkedDialog"
 import { OnboardingGuard } from "@/components/OnboardingGuard"
+import { DiscoveredJobs } from "@/components/DiscoveredJobs"
 
 const quickActions = [
   {
@@ -205,6 +206,8 @@ export default async function DashboardPage() {
             <ResumeProfileBox userId={user.sub} />
 
             <PendingActions userId={user.sub} />
+
+            <DiscoveredJobs userId={user.sub} />
 
             <article className="overflow-hidden rounded-3xl border border-black/20 bg-[#171717] text-white">
               <div className="flex items-center justify-between border-b border-white/20 p-5">

@@ -55,6 +55,22 @@ export async function editMessageReplyMarkup(
   })
 }
 
+export async function editMessageText(
+  botToken: string,
+  chatId: string,
+  messageId: number,
+  text: string,
+  replyMarkup?: unknown
+) {
+  return sendTelegram(botToken, "editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: "HTML",
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+  })
+}
+
 export async function answerCallbackQuery(
   botToken: string,
   callbackQueryId: string,

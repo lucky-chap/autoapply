@@ -54,6 +54,12 @@ export async function handleCallbackQuery(
     await handleCalCheck(ctx, botToken, chatId, callbackQuery.id, data)
   } else if (data.startsWith("toggle_resume:")) {
     await handleToggleResume(ctx, botToken, chatId, callbackQuery, data)
+  } else if (data.startsWith("job_view:")) {
+    await handleJobView(ctx, botToken, chatId, messageId, callbackQuery.id, data)
+  } else if (data.startsWith("job_apply:")) {
+    await handleJobApply(ctx, botToken, chatId, messageId, callbackQuery.id, data)
+  } else if (data.startsWith("job_skip:")) {
+    await handleJobSkip(ctx, botToken, chatId, messageId, callbackQuery.id, data)
   }
 }
 
@@ -600,5 +606,244 @@ async function handleToggleResume(
   } catch (err) {
     console.error("[telegram] toggle_resume failed:", err)
     await answerCallbackQuery(botToken, callbackQuery.id, "Failed to toggle.")
+  }
+}
+
+// ── Job board match: Apply ──
+
+async function handleJobApply(
+  ctx: ActionCtx, botToken: string, chatId: string,
+  messageId: number | undefined, callbackQueryId: string, data: string
+) {
+  const parts = data.replace("job_apply:", "").split(":")
+  const matchId = parts[0] as Id<"userJobMatches">
+  const currentIndex = parseInt(parts[1] || "0", 10)
+
+  try {
+    await answerCallbackQuery(botToken, callbackQueryId, "Preparing application…")
+    if (messageId) await editMessageReplyMarkup(botToken, chatId, messageId)
+
+    // Get the match and its linked job listing
+    const match = await ctx.runQuery(internal.sourcing.queries.getMatchById, {
+      matchId,
+    })
+    if (!match) {
+      await sendMessage(botToken, chatId, "❌ Match not found or already processed.")
+      return
+    }
+    const job = await ctx.runQuery(internal.sourcing.queries.getJobById, {
+      jobId: match.jobListingId,
+    })
+    if (!job) {
+      await sendMessage(botToken, chatId, "❌ Job listing no longer available.")
+      return
+    }
+
+    // Get user link
+    const link = await ctx.runQuery(
+      internal.telegramLinks.getLinkByTelegramChatId,
+      { telegramChatId: chatId }
+    )
+    if (!link) {
+      await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+      return
+    }
+
+    await sendMessage(botToken, chatId, "⏳ Extracting recruiter email and generating cover letter…")
+
+    // Extract email from description
+    const emailResult = await ctx.runAction(
+      internal.aiActions.extractJobInfo,
+      { jobDescription: job.description }
+    )
+
+    if (!emailResult.email) {
+      // Update match status so it won't reappear
+      await ctx.runMutation(internal.sourcing.store.updateMatchStatus, {
+        matchId,
+        status: "approved",
+      })
+      await sendMessage(
+        botToken, chatId,
+        `⚠️ <b>No recruiter email found</b> for ${escapeHtml(job.title)} at ${escapeHtml(job.company)}.\n\n` +
+          `You can apply directly via the listing:\n${escapeHtml(job.url)}`
+      )
+      
+      // Load next job into the original message layout
+      if (messageId) {
+        await ctx.runAction(internal.sourcing.telegramNotify.renderJobMatchPage, {
+          userId: link.userId,
+          chatId,
+          index: currentIndex, // Index shouldn't change, the approved job effectively disappears from queue
+          messageId,
+        })
+      }
+      return
+    }
+
+    // Generate cover letter
+    const coverLetter = await ctx.runAction(
+      internal.aiActions.generateCoverLetter,
+      {
+        jobDescription: job.description,
+        company: job.company,
+        role: job.title,
+        userId: link.userId,
+      }
+    )
+
+    const subject = `Application for ${job.title} — ${job.company}`
+
+    const profile = await ctx.runQuery(
+      internal.resumeProfiles.getByUserInternal,
+      { userId: link.userId }
+    )
+    const hasResume = !!profile?.fileId
+
+    // Create pending action
+    const pendingActionId = await ctx.runMutation(
+      internal.pendingActions.create,
+      {
+        userId: link.userId,
+        actionType: "send_email" as const,
+        payload: {
+          to: emailResult.email,
+          subject,
+          body: coverLetter,
+          company: job.company,
+          role: job.title,
+          coverLetter,
+        },
+        telegramChatId: chatId,
+        source: "telegram" as const,
+        attachResume: hasResume,
+      }
+    )
+
+    // Update match status
+    await ctx.runMutation(internal.sourcing.store.updateMatchStatus, {
+      matchId,
+      status: "approved",
+    })
+
+    const preview = coverLetter.length > 500
+      ? coverLetter.slice(0, 500) + "…"
+      : coverLetter
+    const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
+
+    const buttons: { text: string; callback_data: string }[][] = [
+      [
+        { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
+        { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
+      ],
+    ]
+    if (hasResume) {
+      buttons.push([
+        { text: "📎 Resume: ON", callback_data: `toggle_resume:${pendingActionId}` },
+      ])
+    }
+
+    const result = (await sendMessage(
+      botToken, chatId,
+      `📧 <b>Ready to apply</b>\n\n` +
+        `<b>${escapeHtml(job.title)}</b> at <b>${escapeHtml(job.company)}</b>\n` +
+        `<b>To:</b> ${escapeHtml(emailResult.email)}${attachLine}\n\n` +
+        `<b>Preview:</b>\n${escapeHtml(preview)}`,
+      { inline_keyboard: buttons }
+    )) as { result?: { message_id?: number } }
+
+    if (result?.result?.message_id) {
+      await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
+        pendingActionId: pendingActionId as Id<"pendingActions">,
+        telegramMessageId: String(result.result.message_id),
+      })
+    }
+
+    // Load next job into the original message layout
+    if (messageId) {
+      await ctx.runAction(internal.sourcing.telegramNotify.renderJobMatchPage, {
+        userId: link.userId,
+        chatId,
+        index: currentIndex, // Stays the same effectively shifting "next" up
+        messageId,
+      })
+    }
+  } catch (err) {
+    console.error("[telegram] job_apply failed:", err)
+    await sendMessage(botToken, chatId, `❌ <b>Failed to prepare application</b>\n\n${escapeHtml(String(err))}`)
+  }
+}
+
+// ── Job board match: Skip ──
+
+async function handleJobSkip(
+  ctx: ActionCtx, botToken: string, chatId: string,
+  messageId: number | undefined, callbackQueryId: string, data: string
+) {
+  const parts = data.replace("job_skip:", "").split(":")
+  const matchId = parts[0] as Id<"userJobMatches">
+  const currentIndex = parseInt(parts[1] || "0", 10)
+
+  try {
+    await ctx.runMutation(internal.sourcing.store.updateMatchStatus, {
+      matchId,
+      status: "ignored",
+    })
+    
+    // Attempt to load next job directly into the same message card
+    if (messageId) {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (link) {
+        await ctx.runAction(internal.sourcing.telegramNotify.renderJobMatchPage, {
+          userId: link.userId,
+          chatId,
+          index: currentIndex, // Index stays the same as skipped item is removed from queue
+          messageId,
+        })
+      }
+    } else {
+      await answerCallbackQuery(botToken, callbackQueryId, "Skipped.")
+      await sendMessage(botToken, chatId, "⏭ Job skipped.")
+    }
+    await answerCallbackQuery(botToken, callbackQueryId)
+  } catch (err) {
+    console.error("[telegram] job_skip failed:", err)
+    await answerCallbackQuery(botToken, callbackQueryId, `Error: ${String(err)}`)
+  }
+}
+
+// ── Job board match: View (Pagination) ──
+
+async function handleJobView(
+  ctx: ActionCtx, botToken: string, chatId: string,
+  messageId: number | undefined, callbackQueryId: string, data: string
+) {
+  const newIndex = parseInt(data.replace("job_view:", ""), 10)
+  try {
+    const link = await ctx.runQuery(
+      internal.telegramLinks.getLinkByTelegramChatId,
+      { telegramChatId: chatId }
+    )
+    if (!link) {
+      await answerCallbackQuery(botToken, callbackQueryId, "Account not linked.")
+      return
+    }
+
+    if (messageId) {
+      await ctx.runAction(internal.sourcing.telegramNotify.renderJobMatchPage, {
+        userId: link.userId,
+        chatId,
+        index: newIndex,
+        messageId,
+      })
+    }
+    
+    await answerCallbackQuery(botToken, callbackQueryId)
+  } catch (err) {
+    console.error("[telegram] job_view failed:", err)
+    await answerCallbackQuery(botToken, callbackQueryId, `Error: ${String(err)}`)
   }
 }

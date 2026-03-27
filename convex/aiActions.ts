@@ -2,35 +2,57 @@ import { internalAction, ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
 
-const GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+/**
+ * Helper to call Gemini API (generativelanguage.googleapis.com)
+ */
+async function callAI(
+  prompt: string,
+  apiKey: string,
+  maxTokens = 4000,
+  jsonMode = false
+): Promise<string> {
+  const model = "gemini-2.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-export async function callGLM(prompt: string, apiKey: string, maxTokens = 4000): Promise<string> {
-  const response = await fetch(GLM_BASE_URL, {
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "glm-4.7-flash",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: maxTokens,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        temperature: 0.1,
+        responseMimeType: jsonMode ? "application/json" : "text/plain",
+      },
     }),
-  })
+  });
 
   if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`GLM API error (${response.status}): ${err}`)
+    const errorText = await response.text();
+    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
   }
 
-  const data = await response.json()
-  const content = data.choices[0].message.content
+  const data = await response.json() as any;
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
   if (!content) {
-    throw new Error(
-      `GLM returned empty content (finish_reason: ${data.choices[0].finish_reason}).`
-    )
+    throw new Error(`Gemini returned empty content (finish_reason: ${data.candidates?.[0]?.finishReason})`);
   }
-  return content
+
+  return content;
+}
+
+/**
+ * Public wrapper for callAI (matches previous API)
+ */
+export async function callGemini(
+  prompt: string,
+  apiKey: string,
+  maxTokens = 4000
+): Promise<string> {
+  return callAI(prompt, process.env.GEMINI_API_KEY!, maxTokens);
 }
 
 export async function extractJobInfoHelper(jobDescription: string): Promise<{
@@ -40,51 +62,41 @@ export async function extractJobInfoHelper(jobDescription: string): Promise<{
   salary: number | null
   multipleDetected: boolean
 }> {
-  const apiKey = process.env.GLM_API_KEY!
+  const apiKey = process.env.GEMINI_API_KEY!
 
-  const result = await callGLM(
-    `You are extracting structured information from a job posting.
+  const prompt = `You are extracting structured information from a job posting.
+
+Please return a JSON object with these fields:
+- "company": string
+- "role": string
+- "email": string
+- "salary": number or null
+- "multipleJobs": boolean (true if >1 listing is detected)
 
 JOB POSTING:
-${jobDescription.slice(0, 4000)}
-
-Extract the following fields from the job posting:
-- "company": the company name
-- "role": the job title / role name
-- "email": a contact or application email address (if present)
-- "salary": the annual salary as a number in USD (if a range is given, use the midpoint; if hourly, multiply by 2080; if monthly, multiply by 12). null if no salary is mentioned.
-- "multipleJobs": true if the text contains more than one distinct job posting (e.g. multiple different companies, multiple unrelated roles at different companies, or clearly separate job listings). false if it's a single job posting (even if lengthy).
-
-Return ONLY a JSON object like:
-{"company": "Stripe", "role": "Senior Frontend Engineer", "email": "jobs@stripe.com", "salary": 180000, "multipleJobs": false}
-
-Rules:
-- If you cannot find the company name, set it to ""
-- If you cannot find the role title, set it to ""
-- If no email is mentioned, set email to ""
-- If no salary/compensation is mentioned, set salary to null
-- Return ONLY the JSON object, no markdown, no explanation`,
-    apiKey,
-  )
+${jobDescription.slice(0, 4000)}`;
 
   try {
-    const cleaned = result
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/, "")
-      .trim()
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return { company: "", role: "", email: "", salary: null, multipleDetected: false }
+    const responseText = await callAI(prompt, apiKey, 2000, true);
+    const cleanJson = responseText.replace(/```json\s*\n?/g, "").replace(/```\s*$/g, "").trim();
+    const raw = JSON.parse(cleanJson);
 
-    const raw = JSON.parse(jsonMatch[0])
     return {
       company: String(raw.company || ""),
-      role: String(raw.role || raw.title || raw.position || ""),
-      email: String(raw.email || raw.contact_email || ""),
+      role: String(raw.role || ""),
+      email: String(raw.email || ""),
       salary: typeof raw.salary === "number" ? raw.salary : null,
-      multipleDetected: raw.multipleJobs === true,
-    }
-  } catch {
-    return { company: "", role: "", email: "", salary: null, multipleDetected: false }
+      multipleDetected: !!raw.multipleJobs,
+    };
+  } catch (err) {
+    console.error("Gemini Extraction Error:", err);
+    return {
+      company: "",
+      role: "",
+      email: "",
+      salary: null,
+      multipleDetected: false,
+    };
   }
 }
 
@@ -93,13 +105,16 @@ export async function generateCoverLetterHelper(
   jobDescription: string,
   company: string,
   role: string,
-  userId: string,
+  userId: string
 ): Promise<string> {
-  const apiKey = process.env.GLM_API_KEY!
+  const apiKey = process.env.GEMINI_API_KEY!
 
-  const profile = await ctx.runQuery(internal.resumeProfiles.getByUserInternal, {
-    userId,
-  })
+  const profile = await ctx.runQuery(
+    internal.resumeProfiles.getByUserInternal,
+    {
+      userId,
+    }
+  )
   if (!profile) {
     throw new Error("No resume profile found. Upload your CV first.")
   }
@@ -109,12 +124,19 @@ export async function generateCoverLetterHelper(
   })
 
   // Extract candidate name from profile rawText (first line is usually the name)
-  const candidateName = profile.rawText.split("\n")[0]?.trim() || "The Candidate"
+  const candidateName =
+    profile.rawText.split("\n")[0]?.trim() || "The Candidate"
 
   const prefsSection = [
-    prefs?.targetRoles?.length ? `Target roles: ${prefs.targetRoles.join(", ")}` : "",
-    prefs?.targetLocations?.length ? `Preferred locations: ${prefs.targetLocations.join(", ")}` : "",
-  ].filter(Boolean).join("\n")
+    prefs?.targetRoles?.length
+      ? `Target roles: ${prefs.targetRoles.join(", ")}`
+      : "",
+    prefs?.targetLocations?.length
+      ? `Preferred locations: ${prefs.targetLocations.join(", ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
 
   const prompt = `You are writing a job application cover letter on behalf of a candidate.
 
@@ -148,7 +170,7 @@ CRITICAL: The letter MUST end immediately after the candidate's name "${candidat
 
 IMPORTANT: Return ONLY plain text. Do NOT use any markdown formatting — no bold (**), no italics (*), no headers (#), no bullet points. Just normal sentences and paragraphs separated by blank lines.`
 
-  const raw = await callGLM(prompt, apiKey)
+  const raw = await callAI(prompt, apiKey, 2000)
 
   // Trim anything after the candidate's name in the sign-off
   const nameIndex = raw.lastIndexOf(candidateName)
@@ -175,6 +197,12 @@ export const generateCoverLetter = internalAction({
     userId: v.string(),
   },
   handler: async (ctx, { jobDescription, company, role, userId }) => {
-    return await generateCoverLetterHelper(ctx, jobDescription, company, role, userId)
+    return await generateCoverLetterHelper(
+      ctx,
+      jobDescription,
+      company,
+      role,
+      userId
+    )
   },
 })

@@ -38,4 +38,18 @@ crons.interval(
   {}
 )
 
+crons.interval(
+  "poll job boards for new listings",
+  { minutes: 30 },
+  internal.sourcing.cron.pollJobBoards,
+  {}
+)
+
+crons.interval(
+  "cleanup old job matches and listings",
+  { hours: 1 },
+  internal.sourcing.cleanup.cleanupOldJobs,
+  {}
+)
+
 export default crons

@@ -47,7 +47,7 @@ export const checkAllInboxes = internalAction({
       return
     }
 
-    for (const [userId, userApps] of byUser) {
+    for (const [userId, userApps] of Array.from(byUser)) {
       let gmailToken: string
       try {
         gmailToken = await getGmailTokenViaTokenVault(ctx, userId)

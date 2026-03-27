@@ -1,7 +1,7 @@
 import { internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
-import { callGLM } from "./aiActions"
+import { callGemini } from "./aiActions"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
 import { formatFollowUpSent } from "./openclaw"
 import { escapeHtml, sendMessage } from "./telegramHelpers"
@@ -13,8 +13,8 @@ async function generateFollowUp(
   role: string,
   candidateName: string,
 ): Promise<string> {
-  const apiKey = process.env.GLM_API_KEY!
-  return await callGLM(
+  const apiKey = process.env.GEMINI_API_KEY!
+  return await callGemini(
     `Write a brief, polite follow-up email for a job application.
 
 The candidate "${candidateName}" applied for the role of "${role}" at "${company}" about a week ago and has not heard back.
@@ -64,7 +64,7 @@ export const checkAndSendFollowUps = internalAction({
 
     let totalQueued = 0
 
-    for (const [userId, userApps] of byUser) {
+    for (const [userId, userApps] of Array.from(byUser)) {
       // Check if user has Telegram linked (needed for approval flow)
       const telegramLink = await ctx.runQuery(
         internal.telegramLinks.getLinkByUserIdInternal,

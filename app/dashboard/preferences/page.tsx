@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useUser } from "@auth0/nextjs-auth0/client"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import {
@@ -21,12 +22,18 @@ import {
 import Link from "next/link"
 
 export default function PreferencesPage() {
-  // TODO: Get actual userId from Auth0
-  const userId = "user_placeholder"
+  const { user } = useUser()
+  const userId = user?.sub
 
-  const existingPreferences = useQuery(api.preferences.getByUser, { userId })
+  const existingPreferences = useQuery(
+    api.preferences.getByUser,
+    userId ? { userId } : "skip"
+  )
   const upsertPreferences = useMutation(api.preferences.upsert)
-  const userSettings = useQuery(api.userSettings.getByUser, { userId })
+  const userSettings = useQuery(
+    api.userSettings.getByUser,
+    userId ? { userId } : "skip"
+  )
   const toggleAutoMode = useMutation(api.userSettings.toggleAutoMode)
   const updateAvailability = useMutation(api.userSettings.updateAvailability)
   const updateOpenclawSettings = useMutation(api.userSettings.updateOpenclawSettings)
@@ -75,6 +82,7 @@ export default function PreferencesPage() {
   }, [userSettings])
 
   const handleSave = async () => {
+    if (!userId) return;
     try {
       setIsSaving(true)
       setSaveStatus("idle")
@@ -96,6 +104,7 @@ export default function PreferencesPage() {
   }
 
   const handleAutoModeToggle = async () => {
+    if (!userId) return;
     if (!userSettings?.autoMode) {
       setShowAutoConfirm(true)
       return
@@ -104,6 +113,7 @@ export default function PreferencesPage() {
   }
 
   const handleSaveAvailability = async () => {
+    if (!userId) return;
     setAvailSaving(true)
     try {
       await updateAvailability({ userId, availabilitySchedule: availSchedule })
@@ -123,6 +133,7 @@ export default function PreferencesPage() {
   }
 
   const handleSaveOpenclaw = async () => {
+    if (!userId) return;
     setOpenclawSaving(true)
     try {
       await updateOpenclawSettings({
@@ -137,6 +148,7 @@ export default function PreferencesPage() {
   }
 
   const confirmAutoMode = async () => {
+    if (!userId) return;
     setShowAutoConfirm(false)
     await toggleAutoMode({ userId })
   }
