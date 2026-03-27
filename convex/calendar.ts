@@ -75,11 +75,40 @@ export function parseProposedTime(timeStr: string, referenceDate: Date): Date | 
   return result
 }
 
+export interface DaySchedule {
+  day: number       // 0=Sunday, 6=Saturday
+  enabled: boolean
+  startHour: number
+  startMinute: number
+  endHour: number
+  endMinute: number
+}
+
+function getWorkHoursForDay(
+  dayOfWeek: number,
+  schedule?: DaySchedule[]
+): { start: number; startMin: number; end: number; endMin: number } | null {
+  if (!schedule) {
+    // Default: Mon-Fri 9am-6pm
+    if (dayOfWeek === 0 || dayOfWeek === 6) return null
+    return { start: 9, startMin: 0, end: 18, endMin: 0 }
+  }
+  const entry = schedule.find((s) => s.day === dayOfWeek)
+  if (!entry || !entry.enabled) return null
+  return {
+    start: entry.startHour,
+    startMin: entry.startMinute,
+    end: entry.endHour,
+    endMin: entry.endMinute,
+  }
+}
+
 export function analyzeAvailability(
   events: CalendarEvent[],
   proposedTimes: string[],
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
+  availabilitySchedule?: DaySchedule[]
 ): AvailabilityResult {
   // Parse events into intervals
   const busyIntervals: { start: Date; end: Date; summary: string }[] = []
@@ -114,26 +143,50 @@ export function analyzeAvailability(
     return { label: pt, available: !hasConflict }
   })
 
-  // Find free 1-hour slots within working hours (9 AM - 6 PM)
+  // Find free 1-hour slots within working hours (user schedule or default 9-6 Mon-Fri)
   const suggestedSlots: SlotInfo[] = []
-  const WORK_START_HOUR = 9
-  const WORK_END_HOUR = 18
   const SLOT_DURATION_MS = 60 * 60 * 1000
 
   const cursor = new Date(rangeStart)
-  // Advance to next working hour if needed
-  if (cursor.getHours() < WORK_START_HOUR) {
-    cursor.setHours(WORK_START_HOUR, 0, 0, 0)
-  } else if (cursor.getHours() >= WORK_END_HOUR) {
-    cursor.setDate(cursor.getDate() + 1)
-    cursor.setHours(WORK_START_HOUR, 0, 0, 0)
+
+  // Advance cursor to the start of the current day's work hours (or next working day)
+  function advanceToWorkStart() {
+    for (let attempt = 0; attempt < 14; attempt++) {
+      const hours = getWorkHoursForDay(cursor.getDay(), availabilitySchedule)
+      if (hours) {
+        const workStartMinutes = hours.start * 60 + hours.startMin
+        const cursorMinutes = cursor.getHours() * 60 + cursor.getMinutes()
+        if (cursorMinutes < workStartMinutes) {
+          cursor.setHours(hours.start, hours.startMin, 0, 0)
+          return
+        }
+        const workEndMinutes = hours.end * 60 + hours.endMin
+        if (cursorMinutes < workEndMinutes) {
+          return // already within work hours
+        }
+      }
+      // Move to next day
+      cursor.setDate(cursor.getDate() + 1)
+      cursor.setHours(0, 0, 0, 0)
+    }
   }
 
-  while (suggestedSlots.length < 3 && cursor.getTime() < rangeEnd.getTime()) {
-    const slotEnd = new Date(cursor.getTime() + SLOT_DURATION_MS)
+  advanceToWorkStart()
 
-    // Check if within working hours
-    if (cursor.getHours() >= WORK_START_HOUR && slotEnd.getHours() <= WORK_END_HOUR) {
+  while (suggestedSlots.length < 3 && cursor.getTime() < rangeEnd.getTime()) {
+    const hours = getWorkHoursForDay(cursor.getDay(), availabilitySchedule)
+    if (!hours) {
+      cursor.setDate(cursor.getDate() + 1)
+      cursor.setHours(0, 0, 0, 0)
+      advanceToWorkStart()
+      continue
+    }
+
+    const slotEnd = new Date(cursor.getTime() + SLOT_DURATION_MS)
+    const workEndMinutes = hours.end * 60 + hours.endMin
+    const slotEndMinutes = slotEnd.getHours() * 60 + slotEnd.getMinutes()
+
+    if (slotEndMinutes <= workEndMinutes && slotEnd.getDate() === cursor.getDate()) {
       const hasConflict = busyIntervals.some(
         (b) => cursor < b.end && slotEnd > b.start
       )
@@ -149,10 +202,12 @@ export function analyzeAvailability(
     // Advance cursor
     cursor.setTime(cursor.getTime() + SLOT_DURATION_MS)
 
-    // Jump to next working day if past work hours
-    if (cursor.getHours() >= WORK_END_HOUR) {
-      cursor.setDate(cursor.getDate() + 1)
-      cursor.setHours(WORK_START_HOUR, 0, 0, 0)
+    // If past work hours for this day, jump to next working day
+    const cursorMinutes = cursor.getHours() * 60 + cursor.getMinutes()
+    if (cursorMinutes >= workEndMinutes || cursor.getDate() !== slotEnd.getDate()) {
+      cursor.setDate(cursor.getDate() + (cursor.getDate() === slotEnd.getDate() ? 1 : 0))
+      cursor.setHours(0, 0, 0, 0)
+      advanceToWorkStart()
     }
   }
 

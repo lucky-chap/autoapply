@@ -141,6 +141,28 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_telegramChatId", ["telegramChatId"]),
 
+  userSettings: defineTable({
+    userId: v.string(),
+    autoMode: v.boolean(),
+    autoModeEnabledAt: v.optional(v.number()),
+    onboardingCompleted: v.boolean(),
+    openclawGatewayUrl: v.optional(v.string()),
+    openclawGatewayToken: v.optional(v.string()),
+    openclawEnabled: v.optional(v.boolean()),
+    availabilitySchedule: v.optional(
+      v.array(
+        v.object({
+          day: v.number(),
+          enabled: v.boolean(),
+          startHour: v.number(),
+          startMinute: v.number(),
+          endHour: v.number(),
+          endMinute: v.number(),
+        })
+      )
+    ),
+  }).index("by_user", ["userId"]),
+
   pendingCalendarSlots: defineTable({
     applicationId: v.id("applications"),
     telegramChatId: v.string(),

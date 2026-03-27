@@ -1,140 +1,23 @@
-import { internalAction } from "./_generated/server"
+/**
+ * Inbox checker — polls Gmail for replies to active applications.
+ *
+ * This is a thin orchestrator. Heavy logic is delegated to:
+ *   replyClassifier.ts     — Gmail reply detection & AI classification
+ *   interviewScheduler.ts  — smart calendar scheduling for interview replies
+ */
+
+import { internalAction, ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
+import { Id } from "./_generated/dataModel"
 import { getGmailTokenViaTokenVault, TokenVaultError } from "./tokenVault"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
-import { analyzeAvailability, parseProposedTime } from "./calendar"
-
-// Decode base64url to UTF-8 string (Convex runtime has no Node Buffer)
-function fromBase64Url(data: string): string {
-  const base64 = data.replace(/-/g, "+").replace(/_/g, "/")
-  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4)
-  const binary = atob(padded)
-  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
-  return new TextDecoder().decode(bytes)
-}
-
-const GLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-
-async function callGLM(prompt: string, apiKey: string): Promise<string> {
-  const response = await fetch(GLM_BASE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "glm-4.7-flash",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 4000,
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`GLM API error (${response.status}): ${err}`)
-  }
-
-  const data = await response.json()
-  return data.choices[0].message.content ?? ""
-}
-
-// Auth helpers moved to tokenVault.ts
-
-function extractBody(payload: {
-  parts?: { mimeType: string; body?: { data?: string } }[]
-  body?: { data?: string }
-}): string {
-  if (payload.parts) {
-    const textPart = payload.parts.find(
-      (p: { mimeType: string }) => p.mimeType === "text/plain"
-    )
-    if (textPart?.body?.data) {
-      return fromBase64Url(textPart.body.data)
-    }
-  }
-  if (payload.body?.data) {
-    return fromBase64Url(payload.body.data)
-  }
-  return ""
-}
-
-async function checkReplyForApp(
-  app: {
-    _id: string
-    recipientEmail: string
-    gmailThreadId?: string
-    lastCheckedGmailMsgId?: string
-    role: string
-    company: string
-  },
-  accessToken: string,
-  senderEmail: string
-): Promise<{ mimePayload: unknown; gmailMsgId: string } | null> {
-  if (app.gmailThreadId) {
-    const threadRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${app.gmailThreadId}?format=full`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    if (threadRes.ok) {
-      const thread = await threadRes.json()
-      const messages = thread.messages || []
-
-      // Skip if thread only has 1 message (the one we sent)
-      if (messages.length <= 1) return null
-
-      // Find messages NOT sent by us (i.e. replies from the recipient)
-      const replies = messages.filter(
-        (msg: { payload?: { headers?: { name: string; value: string }[] } }) => {
-          const fromHeader = msg.payload?.headers?.find(
-            (h: { name: string }) => h.name.toLowerCase() === "from"
-          )
-          if (!fromHeader) return false
-          const fromValue = fromHeader.value.toLowerCase()
-          // Exclude messages from ourselves
-          if (senderEmail && fromValue.includes(senderEmail.toLowerCase())) return false
-          // Must be from someone (ideally the recipient)
-          return true
-        }
-      )
-      if (replies.length > 0) {
-        const latestReply = replies[replies.length - 1]
-        const msgId = latestReply.id as string
-        // Skip if we already processed this exact message
-        if (app.lastCheckedGmailMsgId === msgId) return null
-        return { mimePayload: latestReply.payload, gmailMsgId: msgId }
-      }
-    }
-  } else {
-    const query = `from:${app.recipientEmail} newer_than:7d`
-    const params = new URLSearchParams({ q: query, maxResults: "3" })
-    const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    if (listRes.ok) {
-      const listData = await listRes.json()
-      if (listData.messages && listData.messages.length > 0) {
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${listData.messages[0].id}?format=full`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        )
-        if (msgRes.ok) {
-          const msg = await msgRes.json()
-          const msgId = listData.messages[0].id as string
-          if (app.lastCheckedGmailMsgId === msgId) return null
-          return { mimePayload: msg.payload, gmailMsgId: msgId }
-        }
-      }
-    }
-  }
-  return null
-}
+import { formatReplyReceived, formatInterviewRequest } from "./openclaw"
+import { checkReplyForApp, extractBody, classifyReply } from "./replyClassifier"
+import { handleInterviewScheduling } from "./interviewScheduler"
 
 export const checkAllInboxes = internalAction({
   args: {},
   handler: async (ctx) => {
-    const glmApiKey = process.env.GLM_API_KEY!
-
     const applications = await ctx.runQuery(
       internal.applications.getActiveApplications,
       {}
@@ -156,7 +39,6 @@ export const checkAllInboxes = internalAction({
     let totalChecked = 0
     let totalUpdated = 0
 
-    // Get management token once for all user lookups
     let managementToken: string
     try {
       managementToken = await getAuth0ManagementToken()
@@ -172,7 +54,6 @@ export const checkAllInboxes = internalAction({
       } catch (err) {
         console.log(`[cron] Token Vault failed for user ${userId}: ${err}`)
         if (err instanceof TokenVaultError && err.isReauthRequired) {
-          // Notify via Telegram if linked
           const link = await ctx.runQuery(
             internal.telegramLinks.getLinkByUserIdInternal,
             { userId }
@@ -191,12 +72,12 @@ export const checkAllInboxes = internalAction({
         continue
       }
 
-      // Get sender email to filter out our own messages from threads
       const userInfo = await getUserEmail(managementToken, userId)
       const senderEmail = userInfo?.email ?? ""
 
       for (const app of userApps) {
         totalChecked++
+
         const reply = await checkReplyForApp(
           {
             _id: app._id,
@@ -209,7 +90,6 @@ export const checkAllInboxes = internalAction({
           gmailToken,
           senderEmail
         )
-
         if (!reply) continue
 
         const bodyText = extractBody(
@@ -220,74 +100,17 @@ export const checkAllInboxes = internalAction({
         )
         if (!bodyText) continue
 
-        const classifyPrompt = `You are a highly precise email classifier for a job application agent. 
+        // ── Classify the reply ──
 
-The candidate applied for the role of "${app.role}" at "${app.company}".
+        const classification = await classifyReply(bodyText, app.company, app.role)
+        if (!classification) continue
 
-EMAIL REPLY:
-${bodyText.slice(0, 3000)}
-
-Return a JSON object with these EXACT fields:
-1. "status" — EXACTLY ONE of: "Replied", "Interview", "Offer", "Rejected"
-   - "Interview" — IF the email asks to schedule a call, interview, or availability.
-   - "Offer" — IF the email extends a formal or informal job offer.
-   - "Rejected" — IF they are not moving forward.
-   - "Replied" — Any other general communication.
-2. "summary" — A 1-2 sentence plain text summary of the recruiter's message.
-3. "actionNeeded" — boolean. true if the candidate needs to respond (e.g. schedule, answer a question).
-4. "mentionedSalary" — Extract any annual salary number found. null if none.
-5. "schedulingLink" — EXTRACT ANY URL for scheduling (Calendly, HubSpot, etc.). EXTRACT THE FULL URL. null if none.
-6. "proposedTimes" — EXTRACT SPECIFIC dates/times mentioned for an interview as an array of strings. [] if none.
-
-CRITICAL: Look very carefully for links and times. If there is a "Schedule an interview" button or link, extract it.
-Return ONLY the JSON object.`
-
-        const classificationRaw = await callGLM(classifyPrompt, glmApiKey)
-        console.log(`[inboxChecker] AI Raw Output for ${app.company}:`, classificationRaw)
-
-        let status = ""
-        let replySummary = ""
-        let actionNeeded = true
-        let mentionedSalary: number | null = null
-        let schedulingLink: string | null = null
-        let proposedTimes: string[] = []
-        try {
-          const cleaned = classificationRaw
-            .replace(/^```(?:json)?\s*/i, "")
-            .replace(/\s*```\s*$/, "")
-            .trim()
-          const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0])
-            status = String(parsed.status || "").trim().replace(/['"]/g, "")
-            replySummary = String(parsed.summary || "").trim()
-            actionNeeded = parsed.actionNeeded !== false
-            mentionedSalary = typeof parsed.mentionedSalary === "number" ? parsed.mentionedSalary : null
-            schedulingLink = parsed.schedulingLink || null
-            proposedTimes = Array.isArray(parsed.proposedTimes) ? parsed.proposedTimes : []
-
-            console.log(`[inboxChecker] Parsed AI fields for ${app.company}:`, { status, schedulingLink, proposedTimesCount: proposedTimes.length })
-          }
-        } catch (err) {
-          console.error("[inboxChecker] JSON parse failed:", err)
-          status = classificationRaw.trim().replace(/['"]/g, "")
-        }
-
-        const validStatuses = [
-          "Replied",
-          "Interview",
-          "Offer",
-          "Rejected",
-        ] as const
-        const matchedStatus = validStatuses.find(
-          (s) => status.toLowerCase() === s.toLowerCase()
-        )
-
-        if (!matchedStatus) continue
-
+        const {
+          status: matchedStatus, replySummary, actionNeeded,
+          mentionedSalary, schedulingLink, proposedTimes,
+        } = classification
         const statusChanged = matchedStatus !== app.status
 
-        // Always update lastCheckedGmailMsgId, and status if it changed
         await ctx.runMutation(
           internal.applications.internalUpdateStatus,
           {
@@ -300,295 +123,36 @@ Return ONLY the JSON object.`
         )
         if (statusChanged) totalUpdated++
 
-        // Always notify on new replies (this is a new message we haven't seen)
+        // ── Notify via Telegram ──
+
         const telegramLink = await ctx.runQuery(
           internal.telegramLinks.getLinkByUserIdInternal,
           { userId: app.userId }
         )
         if (telegramLink) {
-          const emoji =
-            matchedStatus === "Interview" ? "📅" :
-            matchedStatus === "Offer" ? "🎉" :
-            matchedStatus === "Rejected" ? "😔" : "💬"
-          const statusLine = statusChanged
-            ? `Status: <b>${matchedStatus}</b> (was ${app.status})`
-            : `Status: <b>${matchedStatus}</b>`
-          const summaryLine = replySummary
-            ? `\n\n📝 <b>Summary:</b> ${replySummary}`
-            : ""
-          const actionLine = actionNeeded
-            ? "\n\n👉 <b>Action needed</b> — check your email and respond."
-            : "\n\n<i>No action needed on your part.</i>"
-
-          // Scheduling info
-          let schedulingAlert = ""
-          if (schedulingLink) {
-            schedulingAlert = `\n\n📅 <b>Schedule here:</b> ${schedulingLink}`
-          }
-          if (proposedTimes.length > 0) {
-            schedulingAlert += `\n\n⏰ <b>Proposed times:</b>\n- ${proposedTimes.join("\n- ")}`
-          }
-
-          // Salary alert for offers
-          let salaryAlert = ""
-          if (matchedStatus === "Offer" && mentionedSalary !== null) {
-            const prefs = await ctx.runQuery(
-              internal.preferences.getByUserInternal,
-              { userId: app.userId }
-            )
-            if (prefs?.minSalary && mentionedSalary < prefs.minSalary) {
-              salaryAlert = `\n\n⚠️ <b>Salary alert:</b> The mentioned compensation (~$${mentionedSalary.toLocaleString()}) appears below your minimum of $${prefs.minSalary.toLocaleString()}.`
-            }
-          }
-
-          // ── Smart auto-scheduling for Interview status ──
-          let notificationSent = false
-
-          if (matchedStatus === "Interview") {
-            try {
-              const now = new Date()
-              const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-
-              const calEvents = await ctx.runAction(internal.calendar.getCalendarConflicts, {
-                userId: app.userId,
-                startTime: now.toISOString(),
-                endTime: sevenDaysLater.toISOString(),
-              })
-
-              const availability = analyzeAvailability(
-                calEvents,
-                proposedTimes,
-                now,
-                sevenDaysLater
-              )
-
-              // Check if user has a resume
-              const profile = await ctx.runQuery(
-                internal.resumeProfiles.getByUserInternal,
-                { userId: app.userId }
-              )
-              const hasResume = !!profile?.fileId
-
-              const availableProposed = availability.proposedTimeStatus.filter(
-                (pt) => pt.available === true
-              )
-
-              if (availableProposed.length > 0) {
-                // ── Scenario A: Recruiter proposed dates, at least one is free ──
-                const firstAvailable = availableProposed[0]
-                const parsedTime = parseProposedTime(firstAvailable.label, now)
-
-                if (parsedTime) {
-                  const startTime = parsedTime.toISOString()
-                  const endTime = new Date(parsedTime.getTime() + 60 * 60 * 1000).toISOString()
-
-                  // Create calendar event
-                  await ctx.runAction(internal.calendar.createCalendarEvent, {
-                    userId: app.userId,
-                    summary: `Interview — ${app.company} (${app.role})`,
-                    description: "Auto-scheduled via AutoApply",
-                    startTime,
-                    endTime,
-                  })
-
-                  // Compose confirmation email
-                  const emailBody =
-                    `Hi,\n\n` +
-                    `Thank you for reaching out regarding the ${app.role} position.\n\n` +
-                    `I'd like to confirm that ${firstAvailable.label} works for me.\n\n` +
-                    `Please let me know if there's anything I should prepare.\n\n` +
-                    `Best regards`
-                  const subject = `Re: ${app.role} at ${app.company}`
-
-                  const pendingActionId = await ctx.runMutation(
-                    internal.pendingActions.create,
-                    {
-                      userId: app.userId,
-                      actionType: "send_email" as const,
-                      payload: {
-                        to: app.recipientEmail,
-                        subject,
-                        body: emailBody,
-                        company: app.company,
-                        role: app.role,
-                        coverLetter: emailBody,
-                      },
-                      telegramChatId: telegramLink.telegramChatId,
-                      source: "telegram" as const,
-                      applicationId: app._id,
-                      attachResume: hasResume,
-                    }
-                  )
-
-                  const preview = emailBody.length > 400 ? emailBody.slice(0, 400) + "..." : emailBody
-                  const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
-
-                  const buttons: { text: string; callback_data: string }[][] = [
-                    [
-                      { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-                      { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-                    ],
-                  ]
-                  if (hasResume) {
-                    buttons.push([
-                      { text: "📎 Resume: ON", callback_data: `toggle_resume:${pendingActionId}` },
-                    ])
-                  }
-                  buttons.push([
-                    { text: "📅 Check My Calendar", callback_data: `cal:${app._id}` },
-                  ])
-
-                  const msg =
-                    `📅 <b>${app.company}</b> — Interview for <b>${app.role}</b>\n\n` +
-                    `${statusLine}${summaryLine}\n\n` +
-                    `✅ <b>${firstAvailable.label}</b> is available!\n` +
-                    `📅 Calendar event created.\n\n` +
-                    `📧 <b>Draft reply to recruiter:</b>\n` +
-                    `<b>To:</b> ${app.recipientEmail}\n` +
-                    `<b>Subject:</b> ${subject}${attachLine}\n\n` +
-                    `${preview}`
-
-                  const result = (await ctx.runAction(internal.telegram.sendNotification, {
-                    chatId: telegramLink.telegramChatId,
-                    text: msg,
-                    replyMarkup: { inline_keyboard: buttons },
-                  })) as { result?: { message_id?: number } }
-
-                  if (result?.result?.message_id) {
-                    await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
-                      pendingActionId,
-                      telegramMessageId: String(result.result.message_id),
-                    })
-                  }
-
-                  notificationSent = true
-                }
-              }
-
-              if (!notificationSent) {
-                // ── Scenario B: No proposed dates, or none available ──
-                // Store slots for cal_block usage
-                await ctx.runMutation(internal.calendar.upsertCalendarSlots, {
-                  applicationId: app._id,
-                  telegramChatId: telegramLink.telegramChatId,
-                  slots: availability.suggestedSlots,
-                  proposedTimeStatus: availability.proposedTimeStatus,
-                })
-
-                const availableTimes: string[] = [
-                  ...availability.proposedTimeStatus
-                    .filter((pt) => pt.available === true)
-                    .map((pt) => pt.label),
-                  ...availability.suggestedSlots.map((s) => s.label),
-                ]
-
-                if (availableTimes.length > 0) {
-                  const slotList = availableTimes.map((t) => `- ${t}`).join("\n")
-                  const emailBody =
-                    `Hi,\n\n` +
-                    `Thank you for getting back to me regarding the ${app.role} position.\n\n` +
-                    `I'm available at the following times:\n\n` +
-                    `${slotList}\n\n` +
-                    `Please let me know which works best, and I'll confirm.\n\n` +
-                    `Best regards`
-                  const subject = `Re: ${app.role} at ${app.company}`
-
-                  const pendingActionId = await ctx.runMutation(
-                    internal.pendingActions.create,
-                    {
-                      userId: app.userId,
-                      actionType: "send_email" as const,
-                      payload: {
-                        to: app.recipientEmail,
-                        subject,
-                        body: emailBody,
-                        company: app.company,
-                        role: app.role,
-                        coverLetter: emailBody,
-                      },
-                      telegramChatId: telegramLink.telegramChatId,
-                      source: "telegram" as const,
-                      applicationId: app._id,
-                      attachResume: hasResume,
-                    }
-                  )
-
-                  const preview = emailBody.length > 400 ? emailBody.slice(0, 400) + "..." : emailBody
-                  const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
-
-                  const buttons: { text: string; callback_data: string }[][] = [
-                    [
-                      { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-                      { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-                    ],
-                  ]
-                  if (hasResume) {
-                    buttons.push([
-                      { text: "📎 Resume: ON", callback_data: `toggle_resume:${pendingActionId}` },
-                    ])
-                  }
-                  buttons.push([
-                    { text: "📅 Block Time", callback_data: `cal_block:${app._id}` },
-                    { text: "📅 Check My Calendar", callback_data: `cal:${app._id}` },
-                  ])
-
-                  // Show conflicting proposed times if any
-                  let conflictInfo = ""
-                  const conflicts = availability.proposedTimeStatus.filter(
-                    (pt) => pt.available === false
-                  )
-                  if (conflicts.length > 0) {
-                    conflictInfo = `\n\n❌ <b>Conflicting proposed times:</b>\n` +
-                      conflicts.map((c) => `- ${c.label}`).join("\n")
-                  }
-
-                  const msg =
-                    `📅 <b>${app.company}</b> — Interview for <b>${app.role}</b>\n\n` +
-                    `${statusLine}${summaryLine}${conflictInfo}\n\n` +
-                    `📧 <b>Draft availability reply:</b>\n` +
-                    `<b>To:</b> ${app.recipientEmail}\n` +
-                    `<b>Subject:</b> ${subject}${attachLine}\n\n` +
-                    `${preview}`
-
-                  const result = (await ctx.runAction(internal.telegram.sendNotification, {
-                    chatId: telegramLink.telegramChatId,
-                    text: msg,
-                    replyMarkup: { inline_keyboard: buttons },
-                  })) as { result?: { message_id?: number } }
-
-                  if (result?.result?.message_id) {
-                    await ctx.runMutation(internal.pendingActions.setTelegramMessageId, {
-                      pendingActionId,
-                      telegramMessageId: String(result.result.message_id),
-                    })
-                  }
-
-                  notificationSent = true
-                }
-              }
-            } catch (err) {
-              console.error("[inboxChecker] Auto-scheduling failed, falling back:", err)
-            }
-          }
-
-          // ── Default notification (non-Interview, or auto-scheduling failed) ──
-          if (!notificationSent) {
-            const replyMarkup =
-              (matchedStatus === "Interview" || (proposedTimes && proposedTimes.length > 0) || schedulingLink)
-                ? {
-                    inline_keyboard: [
-                      [{ text: "📅 Check My Calendar", callback_data: `cal:${app._id}` }],
-                    ],
-                  }
-                : undefined
-
-            await ctx.runAction(internal.telegram.sendNotification, {
-              chatId: telegramLink.telegramChatId,
-              text: `${emoji} <b>${app.company}</b> update for <b>${app.role}</b>\n\n${statusLine}${summaryLine}${salaryAlert}${schedulingAlert}${actionLine}`,
-              replyMarkup,
-            })
-          }
+          await sendReplyNotification(ctx, {
+            app,
+            matchedStatus,
+            statusChanged,
+            replySummary,
+            actionNeeded,
+            mentionedSalary,
+            schedulingLink,
+            proposedTimes,
+            telegramChatId: telegramLink.telegramChatId,
+          })
         }
+
+        // ── OpenClaw notification ──
+
+        const openclawMessage =
+          matchedStatus === "Interview"
+            ? formatInterviewRequest(app.company, app.role, proposedTimes)
+            : formatReplyReceived(app.company, app.role, matchedStatus)
+        await ctx.runAction(internal.openclaw.sendNotification, {
+          userId: app.userId,
+          message: openclawMessage,
+        })
       }
     }
 
@@ -597,3 +161,106 @@ Return ONLY the JSON object.`
     )
   },
 })
+
+// ── Build and send the Telegram notification for a reply ──
+
+async function sendReplyNotification(
+  ctx: ActionCtx,
+  opts: {
+    app: {
+      _id: string
+      userId: string
+      company: string
+      role: string
+      recipientEmail: string
+      status?: string
+    }
+    matchedStatus: "Replied" | "Interview" | "Offer" | "Rejected"
+    statusChanged: boolean
+    replySummary: string
+    actionNeeded: boolean
+    mentionedSalary: number | null
+    schedulingLink: string | null
+    proposedTimes: string[]
+    telegramChatId: string
+  }
+): Promise<void> {
+  const {
+    app, matchedStatus, statusChanged, replySummary, actionNeeded,
+    mentionedSalary, schedulingLink, proposedTimes, telegramChatId,
+  } = opts
+
+  const emoji =
+    matchedStatus === "Interview" ? "📅" :
+    matchedStatus === "Offer" ? "🎉" :
+    matchedStatus === "Rejected" ? "😔" : "💬"
+
+  const statusLine = statusChanged
+    ? `Status: <b>${matchedStatus}</b> (was ${app.status})`
+    : `Status: <b>${matchedStatus}</b>`
+  const summaryLine = replySummary ? `\n\n📝 <b>Summary:</b> ${replySummary}` : ""
+  const actionLine = actionNeeded
+    ? "\n\n👉 <b>Action needed</b> — check your email and respond."
+    : "\n\n<i>No action needed on your part.</i>"
+
+  let schedulingAlert = ""
+  if (schedulingLink) {
+    schedulingAlert = `\n\n📅 <b>Schedule here:</b> ${schedulingLink}`
+  }
+  if (proposedTimes.length > 0) {
+    schedulingAlert += `\n\n⏰ <b>Proposed times:</b>\n- ${proposedTimes.join("\n- ")}`
+  }
+
+  let salaryAlert = ""
+  if (matchedStatus === "Offer" && mentionedSalary !== null) {
+    const prefs = await ctx.runQuery(
+      internal.preferences.getByUserInternal,
+      { userId: app.userId }
+    )
+    if (prefs?.minSalary && mentionedSalary < prefs.minSalary) {
+      salaryAlert = `\n\n⚠️ <b>Salary alert:</b> The mentioned compensation (~$${mentionedSalary.toLocaleString()}) appears below your minimum of $${prefs.minSalary.toLocaleString()}.`
+    }
+  }
+
+  // ── Smart auto-scheduling for Interview status ──
+
+  let notificationSent = false
+
+  if (matchedStatus === "Interview") {
+    try {
+      notificationSent = await handleInterviewScheduling(
+        ctx,
+        {
+          _id: app._id as Id<"applications">,
+          userId: app.userId,
+          company: app.company,
+          role: app.role,
+          recipientEmail: app.recipientEmail,
+        },
+        proposedTimes,
+        { statusLine, summaryLine, telegramChatId }
+      )
+    } catch (err) {
+      console.error("[inboxChecker] Auto-scheduling failed, falling back:", err)
+    }
+  }
+
+  // ── Default notification (non-Interview, or scheduling failed) ──
+
+  if (!notificationSent) {
+    const replyMarkup =
+      (matchedStatus === "Interview" || proposedTimes.length > 0 || schedulingLink)
+        ? {
+            inline_keyboard: [
+              [{ text: "📅 Check My Calendar", callback_data: `cal:${app._id}` }],
+            ],
+          }
+        : undefined
+
+    await ctx.runAction(internal.telegram.sendNotification, {
+      chatId: telegramChatId,
+      text: `${emoji} <b>${app.company}</b> update for <b>${app.role}</b>\n\n${statusLine}${summaryLine}${salaryAlert}${schedulingAlert}${actionLine}`,
+      replyMarkup,
+    })
+  }
+}

@@ -3,10 +3,8 @@ import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 import { callGLM } from "./aiActions"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
-
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-}
+import { formatFollowUpSent } from "./openclaw"
+import { escapeHtml, sendMessage } from "./telegramHelpers"
 
 // ── Follow-up email generation ──
 
@@ -78,6 +76,13 @@ export const checkAndSendFollowUps = internalAction({
       const userInfo = await getUserEmail(managementToken, userId)
       const candidateName = userInfo?.name ?? "The Candidate"
 
+      // Check if user has auto mode enabled
+      const userSettings = await ctx.runQuery(
+        internal.userSettings.getByUserInternal,
+        { userId }
+      )
+      const isAutoMode = userSettings?.autoMode ?? false
+
       for (const app of userApps) {
         // Skip apps without a Gmail thread (can't reply without one)
         if (!app.gmailThreadId) continue
@@ -87,7 +92,7 @@ export const checkAndSendFollowUps = internalAction({
 
           const subject = `Re: Application for ${app.role} at ${app.company}`
 
-          // Create pending action for approval via Telegram
+          // Create pending action
           const pendingActionId = await ctx.runMutation(
             internal.pendingActions.create,
             {
@@ -112,35 +117,30 @@ export const checkAndSendFollowUps = internalAction({
             id: app._id,
           })
 
-          // Send Telegram preview with approval buttons
+          if (isAutoMode) {
+            // Auto mode: approve immediately without Telegram preview
+            await ctx.runMutation(internal.pendingActions.internalApprove, {
+              id: pendingActionId as Id<"pendingActions">,
+            })
+            // Notify via OpenClaw
+            await ctx.runAction(internal.openclaw.sendNotification, {
+              userId,
+              message: formatFollowUpSent(app.company, app.role),
+            })
+            totalQueued++
+            continue
+          }
+
+          // Normal mode: send Telegram preview with approval buttons
           const preview = followUpBody.length > 300
             ? followUpBody.slice(0, 300) + "..."
             : followUpBody
 
           const botToken = process.env.TELEGRAM_BOT_TOKEN!
 
-          const sendTelegramMsg = async (text: string, replyMarkup?: unknown) => {
-            const res = await fetch(
-              `https://api.telegram.org/bot${botToken}/sendMessage`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: telegramLink.telegramChatId,
-                  text,
-                  parse_mode: "HTML",
-                  ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-                }),
-              }
-            )
-            if (!res.ok) {
-              const err = await res.text()
-              console.error(`[follow-up] Telegram sendMessage failed: ${err}`)
-            }
-            return res.json()
-          }
-
-          const result = (await sendTelegramMsg(
+          const result = (await sendMessage(
+            botToken,
+            telegramLink.telegramChatId,
             `📬 <b>Follow-up ready</b>\n\n` +
               `It's been a week since you applied to <b>${escapeHtml(app.company)}</b> — ${escapeHtml(app.role)}.\n\n` +
               `<b>Follow-up preview:</b>\n${escapeHtml(preview)}`,

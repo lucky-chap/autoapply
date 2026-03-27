@@ -21,6 +21,7 @@ import { ResumeProfileBox } from "@/components/ResumeProfileBox"
 import { PendingActions } from "@/components/PendingActions"
 import { TelegramLinkCard } from "@/components/TelegramLinkCard"
 import { TelegramLinkedDialog } from "@/components/TelegramLinkedDialog"
+import { OnboardingGuard } from "@/components/OnboardingGuard"
 
 const quickActions = [
   {
@@ -85,6 +86,7 @@ export default async function DashboardPage() {
   const user = session.user
 
   return (
+    <OnboardingGuard userId={user.sub!}>
     <div className="min-h-screen bg-white">
       <TelegramLinkedDialog />
 
@@ -274,5 +276,6 @@ export default async function DashboardPage() {
         </section>
       </div>
     </div>
+    </OnboardingGuard>
   )
 }

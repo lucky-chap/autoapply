@@ -25,6 +25,13 @@ crons.interval(
 )
 
 crons.interval(
+  "cleanup stale chat state older than 6 hours",
+  { hours: 1 },
+  internal.chatCleanup.cleanupStaleChatState,
+  {}
+)
+
+crons.interval(
   "send follow-up emails for stale applications",
   { hours: 12 },
   internal.followUp.checkAndSendFollowUps,

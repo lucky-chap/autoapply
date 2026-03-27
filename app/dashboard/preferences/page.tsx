@@ -8,32 +8,52 @@ import {
   Save,
   Loader2,
   ArrowLeft,
-  Plus,
   X,
   MapPin,
   Briefcase,
   CircleDollarSign,
   CheckCircle2,
   AlertCircle,
+  Zap,
+  Clock,
+  Bell,
 } from "lucide-react"
 import Link from "next/link"
 
 export default function PreferencesPage() {
-  // In a real app, we'd get the userId from Auth0 session on the server
-  // and pass it down, or use a hook. For now, we'll assume the session is handled.
-  // Since this is a client component, we'll need the userId.
-  // We'll mock it for now or assume it's available.
   // TODO: Get actual userId from Auth0
   const userId = "user_placeholder"
 
   const existingPreferences = useQuery(api.preferences.getByUser, { userId })
   const upsertPreferences = useMutation(api.preferences.upsert)
+  const userSettings = useQuery(api.userSettings.getByUser, { userId })
+  const toggleAutoMode = useMutation(api.userSettings.toggleAutoMode)
+  const updateAvailability = useMutation(api.userSettings.updateAvailability)
+  const updateOpenclawSettings = useMutation(api.userSettings.updateOpenclawSettings)
 
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle")
   const [roles, setRoles] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [minSalary, setMinSalary] = useState<number | "">("")
+  const [showAutoConfirm, setShowAutoConfirm] = useState(false)
+
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  const DEFAULT_SCHEDULE = DAY_NAMES.map((_, i) => ({
+    day: i,
+    enabled: i >= 1 && i <= 5, // Mon-Fri enabled
+    startHour: 9,
+    startMinute: 0,
+    endHour: 18,
+    endMinute: 0,
+  }))
+
+  const [availSchedule, setAvailSchedule] = useState(DEFAULT_SCHEDULE)
+  const [availSaving, setAvailSaving] = useState(false)
+  const [openclawUrl, setOpenclawUrl] = useState("")
+  const [openclawToken, setOpenclawToken] = useState("")
+  const [openclawEnabled, setOpenclawEnabled] = useState(false)
+  const [openclawSaving, setOpenclawSaving] = useState(false)
 
   useEffect(() => {
     if (existingPreferences) {
@@ -42,6 +62,17 @@ export default function PreferencesPage() {
       setMinSalary(existingPreferences.minSalary || "")
     }
   }, [existingPreferences])
+
+  useEffect(() => {
+    if (userSettings?.availabilitySchedule) {
+      setAvailSchedule(userSettings.availabilitySchedule)
+    }
+    if (userSettings) {
+      setOpenclawUrl(userSettings.openclawGatewayUrl ?? "")
+      setOpenclawToken(userSettings.openclawGatewayToken ?? "")
+      setOpenclawEnabled(userSettings.openclawEnabled ?? false)
+    }
+  }, [userSettings])
 
   const handleSave = async () => {
     try {
@@ -64,6 +95,52 @@ export default function PreferencesPage() {
     }
   }
 
+  const handleAutoModeToggle = async () => {
+    if (!userSettings?.autoMode) {
+      setShowAutoConfirm(true)
+      return
+    }
+    await toggleAutoMode({ userId })
+  }
+
+  const handleSaveAvailability = async () => {
+    setAvailSaving(true)
+    try {
+      await updateAvailability({ userId, availabilitySchedule: availSchedule })
+    } finally {
+      setAvailSaving(false)
+    }
+  }
+
+  const updateDaySchedule = (
+    dayIndex: number,
+    field: string,
+    value: boolean | number
+  ) => {
+    setAvailSchedule((prev) =>
+      prev.map((d) => (d.day === dayIndex ? { ...d, [field]: value } : d))
+    )
+  }
+
+  const handleSaveOpenclaw = async () => {
+    setOpenclawSaving(true)
+    try {
+      await updateOpenclawSettings({
+        userId,
+        openclawGatewayUrl: openclawUrl || undefined,
+        openclawGatewayToken: openclawToken || undefined,
+        openclawEnabled,
+      })
+    } finally {
+      setOpenclawSaving(false)
+    }
+  }
+
+  const confirmAutoMode = async () => {
+    setShowAutoConfirm(false)
+    await toggleAutoMode({ userId })
+  }
+
   const addRole = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && e.currentTarget.value) {
       if (!roles.includes(e.currentTarget.value)) {
@@ -82,6 +159,8 @@ export default function PreferencesPage() {
     }
   }
 
+  const isAutoMode = userSettings?.autoMode ?? false
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <Link
@@ -98,7 +177,7 @@ export default function PreferencesPage() {
             Job Preferences
           </h1>
           <p className="mt-2 text-gray-500">
-            Tell the agent what you're looking for to get the best matches.
+            Tell the agent what you&apos;re looking for to get the best matches.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -130,6 +209,62 @@ export default function PreferencesPage() {
       </div>
 
       <div className="space-y-8">
+        {/* Auto Mode Toggle */}
+        <section className={`rounded-3xl border p-5 shadow-sm sm:p-8 ${isAutoMode ? "border-violet-200 bg-violet-50/50" : "border-gray-100 bg-white"}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isAutoMode ? "bg-violet-100 text-violet-600" : "bg-gray-100 text-gray-500"}`}>
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-primary">Auto Mode</h2>
+                <p className="text-sm text-gray-500">
+                  {isAutoMode
+                    ? "Applications are sent automatically without approval"
+                    : "Send applications without manual approval"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleAutoModeToggle}
+              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${isAutoMode ? "bg-violet-600" : "bg-gray-200"}`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 translate-y-1 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${isAutoMode ? "translate-x-6" : "translate-x-1"}`}
+              />
+            </button>
+          </div>
+        </section>
+
+        {/* Confirmation Dialog */}
+        {showAutoConfirm && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+            <p className="mb-4 text-sm font-semibold text-red-800">
+              Are you sure you want to enable Auto Mode?
+            </p>
+            <p className="mb-4 text-sm text-red-700">
+              When enabled, the agent will generate cover letters and send
+              applications via your Gmail <strong>immediately</strong> without
+              asking for your approval. Follow-up emails will also be sent
+              automatically.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmAutoMode}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700"
+              >
+                Yes, enable Auto Mode
+              </button>
+              <button
+                onClick={() => setShowAutoConfirm(false)}
+                className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-gray-700 ring-1 ring-gray-200 transition-all hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -225,6 +360,183 @@ export default function PreferencesPage() {
               placeholder="e.g. 120000"
               className="w-full rounded-xl border border-gray-100 bg-gray-50 py-3 pr-4 pl-8 text-sm focus:border-amber-200 focus:bg-white focus:outline-hidden"
             />
+          </div>
+        </section>
+
+        {/* Availability Schedule */}
+        <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-primary">
+                  Default Availability
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Set your available hours for interview scheduling.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleSaveAvailability}
+              disabled={availSaving}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {availSaving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+              Save
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {availSchedule.map((day) => (
+              <div
+                key={day.day}
+                className={`flex items-center gap-4 rounded-xl border px-4 py-3 ${
+                  day.enabled
+                    ? "border-indigo-100 bg-indigo-50/30"
+                    : "border-gray-50 bg-gray-50/50"
+                }`}
+              >
+                <button
+                  onClick={() =>
+                    updateDaySchedule(day.day, "enabled", !day.enabled)
+                  }
+                  className={`w-12 text-sm font-bold ${
+                    day.enabled ? "text-indigo-700" : "text-gray-400"
+                  }`}
+                >
+                  {DAY_NAMES[day.day]}
+                </button>
+                <label className="flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    checked={day.enabled}
+                    onChange={(e) =>
+                      updateDaySchedule(day.day, "enabled", e.target.checked)
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </label>
+                {day.enabled && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <select
+                      value={`${day.startHour}:${day.startMinute.toString().padStart(2, "0")}`}
+                      onChange={(e) => {
+                        const [h, m] = e.target.value.split(":").map(Number)
+                        updateDaySchedule(day.day, "startHour", h)
+                        updateDaySchedule(day.day, "startMinute", m)
+                      }}
+                      className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm focus:border-indigo-300 focus:outline-hidden"
+                    >
+                      {Array.from({ length: 48 }, (_, i) => {
+                        const h = Math.floor(i / 2)
+                        const m = (i % 2) * 30
+                        const label = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+                        return (
+                          <option key={label} value={`${h}:${m.toString().padStart(2, "0")}`}>
+                            {label}
+                          </option>
+                        )
+                      })}
+                    </select>
+                    <span className="text-gray-400">to</span>
+                    <select
+                      value={`${day.endHour}:${day.endMinute.toString().padStart(2, "0")}`}
+                      onChange={(e) => {
+                        const [h, m] = e.target.value.split(":").map(Number)
+                        updateDaySchedule(day.day, "endHour", h)
+                        updateDaySchedule(day.day, "endMinute", m)
+                      }}
+                      className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm focus:border-indigo-300 focus:outline-hidden"
+                    >
+                      {Array.from({ length: 48 }, (_, i) => {
+                        const h = Math.floor(i / 2)
+                        const m = (i % 2) * 30
+                        const label = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+                        return (
+                          <option key={label} value={`${h}:${m.toString().padStart(2, "0")}`}>
+                            {label}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* OpenClaw Notifications */}
+        <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${openclawEnabled ? "bg-teal-50 text-teal-600" : "bg-gray-100 text-gray-500"}`}>
+                <Bell className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-primary">OpenClaw Notifications</h2>
+                <p className="text-sm text-gray-500">
+                  Receive push notifications via your OpenClaw instance.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleSaveOpenclaw}
+              disabled={openclawSaving}
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-teal-700 disabled:opacity-50"
+            >
+              {openclawSaving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+              Save
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold text-gray-700">Enable notifications</label>
+              <button
+                onClick={() => setOpenclawEnabled(!openclawEnabled)}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${openclawEnabled ? "bg-teal-600" : "bg-gray-200"}`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 translate-y-1 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${openclawEnabled ? "translate-x-6" : "translate-x-1"}`}
+                />
+              </button>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+                Gateway URL
+              </label>
+              <input
+                type="url"
+                value={openclawUrl}
+                onChange={(e) => setOpenclawUrl(e.target.value)}
+                placeholder="https://my-openclaw.example.com"
+                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm focus:border-teal-200 focus:bg-white focus:outline-hidden"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+                Gateway Token
+              </label>
+              <input
+                type="password"
+                value={openclawToken}
+                onChange={(e) => setOpenclawToken(e.target.value)}
+                placeholder="Your gateway bearer token"
+                className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm focus:border-teal-200 focus:bg-white focus:outline-hidden"
+              />
+            </div>
           </div>
         </section>
       </div>
