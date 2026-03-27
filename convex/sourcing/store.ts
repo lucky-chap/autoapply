@@ -17,6 +17,8 @@ export const insertIfNew = internalMutation({
     salary: v.optional(v.string()),
     category: v.optional(v.string()),
     postedAt: v.optional(v.number()),
+    email: v.optional(v.string()),
+    hasEmail: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -115,6 +117,20 @@ export const getLatestListings = internalQuery({
 })
 
 /**
+ * Get the most recent job listings that have a recruiter email.
+ */
+export const getLatestListingsWithEmail = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    return await ctx.db
+      .query("jobListings")
+      .withIndex("by_hasEmail_and_fetchedAt", (q) => q.eq("hasEmail", true))
+      .order("desc")
+      .take(limit ?? 50)
+  },
+})
+
+/**
  * Update the status of a user job match.
  */
 export const updateMatchStatus = internalMutation({
@@ -140,26 +156,77 @@ export const getTopNewMatches = internalQuery({
   args: {
     userId: v.string(),
     limit: v.optional(v.number()),
+    requireEmail: v.optional(v.boolean()),
   },
-  handler: async (ctx, { userId, limit }) => {
+  handler: async (ctx, { userId, limit, requireEmail }) => {
     const matches = await ctx.db
       .query("userJobMatches")
       .withIndex("by_userId_and_status", (q) =>
         q.eq("userId", userId).eq("status", "new")
       )
-      .take(limit ?? 3)
+      .collect()
 
-    // Join with job data and sort by score desc
+    // Join with job data, optionally filtering to only jobs with emails
     const results = []
     for (const match of matches) {
       const job = await ctx.db.get(match.jobListingId)
       if (job) {
+        if (requireEmail && !job.email) continue
         results.push({ ...match, job })
       }
     }
 
     // Sort by matchScore descending
     results.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
-    return results.slice(0, limit ?? 3)
+    return results.slice(0, limit ?? 5)
   },
+})
+
+/**
+ * Get the top N unnotified matches for a user, sorted by matchScore desc.
+ * Used exclusively by the telegram dispatcher to prevent spamming the user
+ * with exactly the same matches.
+ */
+export const getTopUnnotifiedMatches = internalQuery({
+  args: {
+    userId: v.string(),
+    limit: v.optional(v.number()),
+    requireEmail: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { userId, limit, requireEmail }) => {
+    const matches = await ctx.db
+      .query("userJobMatches")
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", userId).eq("status", "new")
+      )
+      .collect()
+
+    const unnotifiedMatches = matches.filter(m => m.telegramNotified !== true)
+
+    // Join with job data, optionally filtering to only jobs with emails
+    const results = []
+    for (const match of unnotifiedMatches) {
+      const job = await ctx.db.get(match.jobListingId)
+      if (job) {
+        if (requireEmail && !job.email) continue
+        results.push({ ...match, job })
+      }
+    }
+
+    // Sort by matchScore descending
+    results.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
+    return results.slice(0, limit ?? 20)
+  },
+})
+
+/**
+ * Mark a list of matches as notified on telegram to prevent duplicates.
+ */
+export const markAsNotified = internalMutation({
+  args: { matchIds: v.array(v.id("userJobMatches")) },
+  handler: async (ctx, { matchIds }) => {
+    for (const matchId of matchIds) {
+      await ctx.db.patch(matchId, { telegramNotified: true, updatedAt: Date.now() })
+    }
+  }
 })

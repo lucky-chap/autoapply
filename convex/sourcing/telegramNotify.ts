@@ -10,8 +10,9 @@ import {
 } from "../telegramHelpers"
 
 /**
- * Render a single job match page on Telegram.
+ * Render a single job match page on Telegram (manual mode only).
  * Provides Previous/Next pagination over the user's top pending matches.
+ * Only shows jobs that have a recruiter email.
  */
 export const renderJobMatchPage = internalAction({
   args: {
@@ -23,13 +24,13 @@ export const renderJobMatchPage = internalAction({
   handler: async (ctx, args) => {
     const topMatches = await ctx.runQuery(
       internal.sourcing.store.getTopNewMatches,
-      { userId: args.userId, limit: 100 }
+      { userId: args.userId, limit: 100, requireEmail: true }
     )
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN!
 
     if (topMatches.length === 0) {
-      const msg = "🎉 <b>All caught up!</b> You've reviewed all your daily matches."
+      const msg = "No new job matches with recruiter emails right now. We'll notify you when we find some!"
       if (args.messageId) {
         await editMessageText(botToken, args.chatId, args.messageId, msg)
       } else {
@@ -46,35 +47,35 @@ export const renderJobMatchPage = internalAction({
       : ""
 
     let msg =
-      `🔍 <b>Job Match ${idx + 1} of ${topMatches.length}</b>${scoreBadge}\n\n` +
+      `<b>Job Match ${idx + 1} of ${topMatches.length}</b>${scoreBadge}\n\n` +
       `<b>${escapeHtml(match.job.title)}</b>\n` +
-      `🏢 ${escapeHtml(match.job.company)}\n` +
-      `📍 ${escapeHtml(match.job.location)}`
+      `${escapeHtml(match.job.company)}\n` +
+      `${escapeHtml(match.job.location)}`
 
     if (match.job.salary) {
-      msg += `\n💰 ${escapeHtml(match.job.salary)}`
+      msg += `\n${escapeHtml(match.job.salary)}`
     }
 
     if (match.matchReasoning) {
       msg += `\n\n<i>${escapeHtml(match.matchReasoning)}</i>`
     }
 
-    msg += `\n\n🔗 <a href="${escapeHtml(match.job.url)}">View listing</a>`
+    msg += `\n\n<a href="${escapeHtml(match.job.url)}">View listing</a>`
 
     const buttons = [
       [
-        { text: "✅ Apply", callback_data: `job_apply:${match._id}:${idx}` },
-        { text: "❌ Skip", callback_data: `job_skip:${match._id}:${idx}` },
+        { text: "Apply", callback_data: `job_apply:${match._id}:${idx}` },
+        { text: "Skip", callback_data: `job_skip:${match._id}:${idx}` },
       ],
       [] as { text: string; callback_data: string }[]
     ]
 
     // Pagination buttons
     if (idx > 0) {
-      buttons[1].push({ text: "⬅️ Previous", callback_data: `job_view:${idx - 1}` })
+      buttons[1].push({ text: "Previous", callback_data: `job_view:${idx - 1}` })
     }
     if (idx < topMatches.length - 1) {
-      buttons[1].push({ text: "⏭ Next", callback_data: `job_view:${idx + 1}` })
+      buttons[1].push({ text: "Next", callback_data: `job_view:${idx + 1}` })
     }
 
     // Remove empty row if no pagination buttons
@@ -98,8 +99,12 @@ export const notifyAutoApplied = internalAction({
     chatId: v.string(),
     title: v.string(),
     company: v.string(),
+    location: v.string(),
+    salary: v.optional(v.string()),
+    url: v.string(),
     recipientEmail: v.string(),
     matchScore: v.optional(v.number()),
+    matchReasoning: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN!
@@ -108,12 +113,22 @@ export const notifyAutoApplied = internalAction({
       ? ` (${args.matchScore}% match)`
       : ""
 
-    const msg =
-      `🤖 <b>Auto-Applied${scoreBadge}</b>\n\n` +
+    let msg =
+      `<b>Auto-Applied${scoreBadge}</b>\n\n` +
       `<b>${escapeHtml(args.title)}</b>\n` +
-      `🏢 ${escapeHtml(args.company)}\n` +
-      `📬 Sent to: ${escapeHtml(args.recipientEmail)}\n\n` +
-      `<i>This was sent automatically because auto-mode is enabled.</i>`
+      `${escapeHtml(args.company)}\n` +
+      `${escapeHtml(args.location)}`
+
+    if (args.salary) {
+      msg += `\n${escapeHtml(args.salary)}`
+    }
+
+    if (args.matchReasoning) {
+      msg += `\n\n<i>${escapeHtml(args.matchReasoning)}</i>`
+    }
+
+    msg += `\n\nSent to: ${escapeHtml(args.recipientEmail)}`
+    msg += `\n<a href="${escapeHtml(args.url)}">View listing</a>`
 
     await sendMessage(botToken, args.chatId, msg)
   },
@@ -121,7 +136,8 @@ export const notifyAutoApplied = internalAction({
 
 /**
  * Dispatch top matches to Telegram — called after AI matching.
- * Routes to manual approval or auto-apply based on user's autoMode setting.
+ * In auto mode: only processes jobs with emails, shows job info then auto-applies.
+ * In manual mode: shows paginated card with Apply/Skip buttons (email-only jobs).
  */
 export const dispatchMatchesToTelegram = internalAction({
   args: { userId: v.string() },
@@ -142,21 +158,25 @@ export const dispatchMatchesToTelegram = internalAction({
       { userId }
     )
 
-    // Get top 3 new matches
+    // Only fetch matches that have recruiter emails
     const topMatches = await ctx.runQuery(
-      internal.sourcing.store.getTopNewMatches,
-      { userId, limit: 3 }
+      internal.sourcing.store.getTopUnnotifiedMatches,
+      { userId, limit: 20, requireEmail: true }
     )
 
     if (topMatches.length === 0) {
-      console.log(`No new matches for ${userId}, skipping dispatch`)
+      console.log(`No new email-bearing matches for ${userId}, skipping dispatch`)
       return
     }
 
     const isAutoMode = settings?.autoMode === true
 
+    // Mark these as notified so they aren't fetched as "unnotified" next cycle
+    await ctx.runMutation(internal.sourcing.store.markAsNotified, {
+      matchIds: topMatches.map((m) => m._id),
+    })
+
     if (isAutoMode) {
-      // Auto-apply mode: generate cover letter + send email for each
       await handleAutoApply(ctx, userId, link.telegramChatId, topMatches)
     } else {
       // Manual mode: send single job page message starting at index 0
@@ -186,6 +206,7 @@ interface MatchWithJob {
     url: string
     location: string
     salary?: string
+    email?: string
   }
 }
 
@@ -203,25 +224,11 @@ async function handleAutoApply(
 
   for (const match of matches) {
     try {
-      // Try to extract an email from the job description
-      const emailResult = await ctx.runAction(
-        internal.aiActions.extractJobInfo,
-        { jobDescription: match.job.description }
-      )
-
-      if (!emailResult.email) {
-        // No email found — send as manual card instead
-        console.log(
-          `No email found for "${match.job.title}" at ${match.job.company}, falling back to manual`
-        )
-        await ctx.runAction(
-          internal.sourcing.telegramNotify.renderJobMatchPage,
-          {
-            userId,
-            chatId,
-            index: 0,
-          }
-        )
+      const email = match.job.email
+      if (!email) {
+        // Should not happen since we filter for email in the query,
+        // but skip gracefully if it does
+        console.log(`No email for "${match.job.title}" at ${match.job.company}, skipping`)
         continue
       }
 
@@ -245,7 +252,7 @@ async function handleAutoApply(
           userId,
           actionType: "send_email" as const,
           payload: {
-            to: emailResult.email,
+            to: email,
             subject,
             body: coverLetter,
             company: match.job.company,
@@ -269,20 +276,24 @@ async function handleAutoApply(
         status: "applied",
       })
 
-      // Send Telegram confirmation
+      // Send Telegram confirmation with full job details
       await ctx.runAction(
         internal.sourcing.telegramNotify.notifyAutoApplied,
         {
           chatId,
           title: match.job.title,
           company: match.job.company,
-          recipientEmail: emailResult.email,
+          location: match.job.location,
+          salary: match.job.salary,
+          url: match.job.url,
+          recipientEmail: email,
           matchScore: match.matchScore,
+          matchReasoning: match.matchReasoning,
         }
       )
 
       console.log(
-        `Auto-applied: ${match.job.title} at ${match.job.company} → ${emailResult.email}`
+        `Auto-applied: ${match.job.title} at ${match.job.company} → ${email}`
       )
     } catch (err) {
       console.error(

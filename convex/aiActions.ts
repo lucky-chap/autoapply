@@ -1,6 +1,10 @@
+"use node";
 import { internalAction, ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
+import { z } from "zod"
+import { GoogleGenAI, Type } from "@google/genai"
+
 
 /**
  * Helper to call Gemini API (generativelanguage.googleapis.com)
@@ -9,40 +13,38 @@ async function callAI(
   prompt: string,
   apiKey: string,
   maxTokens = 4000,
-  jsonMode = false
+  jsonMode = false,
+  responseSchema?: any
 ): Promise<string> {
-  const model = "gemini-2.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        maxOutputTokens: maxTokens,
-        temperature: 0.1,
-        responseMimeType: jsonMode ? "application/json" : "text/plain",
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+  const ai = new GoogleGenAI({ apiKey })
+  
+  const config: any = {
+    maxOutputTokens: maxTokens,
+    temperature: 0.1,
   }
 
-  const data = await response.json() as any;
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (jsonMode) {
+    config.responseMimeType = "application/json"
+    if (responseSchema) {
+      config.responseSchema = responseSchema
+    }
+  }
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config,
+  })
+
+  const content = response.text
 
   if (!content) {
-    throw new Error(`Gemini returned empty content (finish_reason: ${data.candidates?.[0]?.finishReason})`);
+    throw new Error(`Gemini returned empty content`)
   }
 
-  return content;
+  return content
 }
+
 
 /**
  * Public wrapper for callAI (matches previous API)
@@ -66,29 +68,63 @@ export async function extractJobInfoHelper(jobDescription: string): Promise<{
 
   const prompt = `You are extracting structured information from a job posting.
 
-Please return a JSON object with these fields:
-- "company": string
-- "role": string
-- "email": string
-- "salary": number or null
-- "multipleJobs": boolean (true if >1 listing is detected)
-
 JOB POSTING:
 ${jobDescription.slice(0, 4000)}`;
 
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      company: { type: Type.STRING },
+      role: { type: Type.STRING },
+      email: { type: Type.STRING },
+      salary: { type: Type.INTEGER, nullable: true },
+      multipleJobs: { type: Type.BOOLEAN },
+    },
+  }
+
   try {
-    const responseText = await callAI(prompt, apiKey, 2000, true);
-    const cleanJson = responseText.replace(/```json\s*\n?/g, "").replace(/```\s*$/g, "").trim();
-    const raw = JSON.parse(cleanJson);
+    const responseText = await callAI(prompt, apiKey, 2000, true, responseSchema);
+    
+    // Clean and parse
+    const cleanJson = responseText
+      .replace(/^```json\s*\n?/, "")
+      .replace(/```\s*$/, "")
+      .trim();
+
+    let raw: any;
+    try {
+      raw = JSON.parse(cleanJson);
+    } catch (err) {
+      console.error("Gemini Extraction Parse Error. Raw response:", responseText);
+      throw err;
+    }
+
+    // Validate with Zod
+    const schema = z.object({
+      company: z.string().default(""),
+      role: z.string().default(""),
+      email: z.string().default(""),
+      salary: z.number().nullable().default(null),
+      multipleJobs: z.boolean().default(false),
+    });
+
+    const validation = schema.safeParse(raw);
+    if (!validation.success) {
+       console.error("Gemination Extraction Schema Error:", validation.error.format());
+       throw new Error("Invalid extraction format from AI");
+    }
+
+    const data = validation.data;
 
     return {
-      company: String(raw.company || ""),
-      role: String(raw.role || ""),
-      email: String(raw.email || ""),
-      salary: typeof raw.salary === "number" ? raw.salary : null,
-      multipleDetected: !!raw.multipleJobs,
+      company: data.company,
+      role: data.role,
+      email: data.email,
+      salary: data.salary,
+      multipleDetected: data.multipleJobs,
     };
   } catch (err) {
+
     console.error("Gemini Extraction Error:", err);
     return {
       company: "",

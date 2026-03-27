@@ -1,6 +1,7 @@
 import { internalAction } from "../_generated/server"
 import { internal } from "../_generated/api"
 import { v } from "convex/values"
+import { stripHtml, extractEmail } from "./textUtils"
 
 /**
  * Remotive API integration.
@@ -62,6 +63,9 @@ export const fetchAndStore = internalAction({
 
     let inserted = 0
     for (const job of jobs) {
+      const description = stripHtml(job.description).slice(0, 8000)
+      const email = extractEmail(description)
+
       const added: boolean = await ctx.runMutation(
         internal.sourcing.store.insertIfNew,
         {
@@ -69,7 +73,7 @@ export const fetchAndStore = internalAction({
           source: "remotive",
           title: job.title,
           company: job.company_name,
-          description: stripHtml(job.description).slice(0, 8000),
+          description,
           url: job.url,
           location: job.candidate_required_location || "Remote",
           salary: job.salary || undefined,
@@ -77,6 +81,8 @@ export const fetchAndStore = internalAction({
           postedAt: job.publication_date
             ? new Date(job.publication_date).getTime()
             : undefined,
+          email: email ?? undefined,
+          hasEmail: !!email,
         }
       )
       if (added) inserted++
@@ -88,16 +94,3 @@ export const fetchAndStore = internalAction({
     return { inserted, total: jobs.length }
   },
 })
-
-/** Strip HTML tags from description text */
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#\d+;/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-}

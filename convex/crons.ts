@@ -40,7 +40,7 @@ crons.interval(
 
 crons.interval(
   "poll job boards for new listings",
-  { minutes: 30 },
+  { minutes: 15 },
   internal.sourcing.cron.pollJobBoards,
   {}
 )

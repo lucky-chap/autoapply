@@ -197,9 +197,12 @@ export default defineSchema({
     category: v.optional(v.string()),
     postedAt: v.optional(v.number()),
     fetchedAt: v.number(),
+    email: v.optional(v.string()),
+    hasEmail: v.optional(v.boolean()),
   })
     .index("by_source_and_externalId", ["source", "externalId"])
-    .index("by_fetchedAt", ["fetchedAt"]),
+    .index("by_fetchedAt", ["fetchedAt"])
+    .index("by_hasEmail_and_fetchedAt", ["hasEmail", "fetchedAt"]),
 
   userJobMatches: defineTable({
     userId: v.string(),
@@ -212,6 +215,7 @@ export default defineSchema({
     ),
     matchScore: v.optional(v.number()),
     matchReasoning: v.optional(v.string()),
+    telegramNotified: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

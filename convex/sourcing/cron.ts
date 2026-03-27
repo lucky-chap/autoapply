@@ -7,8 +7,9 @@ import { Id } from "../_generated/dataModel"
  *
  * Strategy:
  *  1. Collect distinct targetRoles across all onboarded users.
- *  2. Fetch jobs from Remotive for each unique role keyword (deduplicated).
- *  3. Evaluate newly-fetched jobs against each user's profile via AI matcher.
+ *  2. Fetch jobs from Remotive + HN "Who is Hiring" (deduplicated).
+ *  3. Prioritize jobs with emails for AI matching (saves Gemini budget).
+ *  4. Evaluate jobs against each user's profile via AI matcher.
  */
 export const pollJobBoards = internalAction({
   args: {},
@@ -45,8 +46,8 @@ export const pollJobBoards = internalAction({
       return
     }
 
-    // 3. Fetch from Remotive for each unique role (deduplicated globally)
-    const fetchBefore = Date.now()
+    // 3. Fetch from all sources
+    // 3a. Remotive — one search per unique role
     for (const role of Array.from(allRoles)) {
       await ctx.runAction(internal.sourcing.remotive.fetchAndStore, {
         search: role,
@@ -54,13 +55,30 @@ export const pollJobBoards = internalAction({
       })
     }
 
-    // 4. Get the latest jobs from the database to evaluate
-    // Even if 0 were *inserted* this cycle, we check the latest ~50 to ensure
-    // all users have been matched against them.
-    const latestJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
-      internal.sourcing.store.getLatestListings,
-      { limit: 50 }
+    // 3b. HN "Who is Hiring" — monthly thread, idempotent (deduped by commentId)
+    await ctx.runAction(internal.sourcing.hackernews.fetchAndStore, {})
+
+    // 4. Get jobs to evaluate, prioritizing those with emails
+    // Email jobs get 80% of the AI budget (auto-apply-able),
+    // plus a small batch of no-email jobs for manual-mode users.
+    const emailJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
+      internal.sourcing.store.getLatestListingsWithEmail,
+      { limit: 8 }
     )
+    const allJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
+      internal.sourcing.store.getLatestListings,
+      { limit: 2 }
+    )
+
+    // Merge and deduplicate
+    const seenIds = new Set<string>()
+    const latestJobs: Array<{ _id: Id<"jobListings"> }> = []
+    for (const job of [...emailJobs, ...allJobs]) {
+      if (!seenIds.has(job._id)) {
+        seenIds.add(job._id)
+        latestJobs.push(job)
+      }
+    }
 
     if (latestJobs.length === 0) {
       console.log("JobBoard cron: no jobs in database to evaluate")
@@ -71,22 +89,34 @@ export const pollJobBoards = internalAction({
     console.log(`JobBoard cron: Evaluating ${jobIdsToEvaluate.length} jobs for ${activeUsers.length} users`)
 
     // 5. Match jobs against each user
+    // Wrap in try/catch so a timeout or error in matching doesn't prevent
+    // dispatching already-created matches from this or previous cycles.
     for (const user of activeUsers) {
-      await ctx.runAction(
-        internal.sourcing.aiMatching.evaluateJobsForUser,
-        {
-          userId: user.userId,
-          jobIds: jobIdsToEvaluate,
-        }
-      )
+      try {
+        await ctx.runAction(
+          internal.sourcing.aiMatching.evaluateJobsForUser,
+          {
+            userId: user.userId,
+            jobIds: jobIdsToEvaluate,
+          }
+        )
+      } catch (e) {
+        console.error(`AI matching failed for ${user.userId}:`, e)
+      }
     }
 
     // 6. Dispatch top matches to Telegram for each user
+    // This always runs, even if matching partially failed above,
+    // so any matches created before the error still get sent.
     for (const user of activeUsers) {
-      await ctx.runAction(
-        internal.sourcing.telegramNotify.dispatchMatchesToTelegram,
-        { userId: user.userId }
-      )
+      try {
+        await ctx.runAction(
+          internal.sourcing.telegramNotify.dispatchMatchesToTelegram,
+          { userId: user.userId }
+        )
+      } catch (e) {
+        console.error(`Telegram dispatch failed for ${user.userId}:`, e)
+      }
     }
 
     console.log("JobBoard cron: cycle complete")
@@ -101,8 +131,9 @@ export const getActiveUsers = internalQuery({
   args: {},
   handler: async (ctx) => {
     // Get all users who have completed onboarding
-    return await ctx.db
+    const all = await ctx.db
       .query("userSettings")
       .take(200)
+    return all.filter((u) => u.onboardingCompleted === true)
   },
 })

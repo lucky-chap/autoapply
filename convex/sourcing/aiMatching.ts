@@ -1,7 +1,10 @@
+"use node"
 import { internalAction } from "../_generated/server"
 import { internal } from "../_generated/api"
 import { v } from "convex/values"
 import { Id } from "../_generated/dataModel"
+import { z } from "zod"
+import { GoogleGenAI, Type } from "@google/genai"
 
 /**
  * Evaluate a batch of newly-fetched job listings against a single user's
@@ -77,49 +80,77 @@ Location: ${job.location}
 ${job.salary ? `Salary: ${job.salary}` : ""}
 Description: ${job.description.slice(0, 3000)}
 
-Please output a JSON object with:
-{
-  "score": number (0-100),
-  "reasoning": "short explanation"
-}
-
-Match Criteria:
+Analyze the match based on these criteria:
 - Technical stack alignment
 - Experience level match
 - Remote/Location preference
-- Industry relevance`
+- Industry relevance
+`
 
-        const model = "gemini-2.5-flash"
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+        const ai = new GoogleGenAI({ apiKey })
 
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              maxOutputTokens: 500,
-              temperature: 0.1,
-              responseMimeType: "application/json",
+        const schema = {
+          type: Type.OBJECT,
+          properties: {
+            score: {
+              type: Type.INTEGER,
+              description: "A match score from 0 to 100",
             },
-          }),
-        })
-
-        if (!response.ok) {
-          const err = await response.text()
-          throw new Error(`Gemini API error (${response.status}): ${err}`)
+            reasoning: {
+              type: Type.STRING,
+              description: "A short explanation for the score",
+            },
+          },
+          required: ["score", "reasoning"],
         }
 
-        const data = (await response.json()) as any
-        const resText = data.candidates?.[0]?.content?.parts?.[0]?.text
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: schema as any,
+            temperature: 0.1,
+          },
+        })
+
+        const resText = response.text
 
         if (!resText) throw new Error("Empty response from Gemini")
 
-        // Strip markdown fences or extra whitespace that Gemini sometimes adds
-        const cleanJson = resText.replace(/```json\s*\n?/g, "").replace(/```\s*$/g, "").trim()
-        const parsed = JSON.parse(cleanJson)
-        const score = typeof parsed.score === "number" ? parsed.score : 0
-        const reasoning = String(parsed.reasoning || "")
+        // 1. Clean JSON: Remove markdown fences (if present) and whitespace
+        const cleanJson = resText
+          .replace(/^```json\s*\n?/, "")
+          .replace(/```\s*$/, "")
+          .trim()
+
+        let parsed: any
+        try {
+          parsed = JSON.parse(cleanJson)
+        } catch (err) {
+          console.error(
+            `AI match JSON parse error for job ${jobId}. Raw:`,
+            resText
+          )
+          throw err
+        }
+
+        // 2. Validate Schema: Ensure we have the required fields
+        const validationSchema = z.object({
+          score: z.number().min(0).max(100),
+          reasoning: z.string().optional(),
+        })
+
+        const validation = validationSchema.safeParse(parsed)
+        if (!validation.success) {
+          console.error(
+            `AI match schema validation error for job ${jobId}:`,
+            validation.error.format()
+          )
+          throw new Error("Invalid response format from AI")
+        }
+
+        const { score, reasoning = "" } = validation.data
 
         // Create a match record regardless of score (mark low scores as "ignored")
         // This prevents redundant AI evaluations in future cycles.
@@ -137,6 +168,9 @@ Match Criteria:
             `Match: ${job.title} at ${job.company} → score ${score} for user ${userId}`
           )
         }
+
+        // 6s delay → 10 RPM, safely under the free-tier limit for gemini-2.5-flash
+        await new Promise((resolve) => setTimeout(resolve, 6000))
       } catch (e) {
         console.error(`AI matching error for job ${jobId}:`, e)
       }
