@@ -1,4 +1,4 @@
-import { query, mutation, internalQuery } from "./_generated/server"
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server"
 import { v } from "convex/values"
 
 export const getByUser = query({
@@ -35,6 +35,9 @@ export const upsert = mutation({
     tone: v.string(),
     rawText: v.string(),
     fileId: v.optional(v.id("_storage")),
+    githubUrl: v.optional(v.string()),
+    linkedinUrl: v.optional(v.string()),
+    portfolioUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -54,6 +57,44 @@ export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
     return await ctx.storage.generateUploadUrl()
+  },
+})
+
+export const updateLinks = mutation({
+  args: {
+    userId: v.string(),
+    githubUrl: v.optional(v.string()),
+    linkedinUrl: v.optional(v.string()),
+    portfolioUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, ...links }) => {
+    const existing = await ctx.db
+      .query("resumeProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first()
+    if (!existing) {
+      throw new Error("No resume profile found. Upload your CV first.")
+    }
+    await ctx.db.patch(existing._id, { ...links, updatedAt: Date.now() })
+  },
+})
+
+export const internalUpdateLinks = internalMutation({
+  args: {
+    userId: v.string(),
+    githubUrl: v.optional(v.string()),
+    linkedinUrl: v.optional(v.string()),
+    portfolioUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, ...links }) => {
+    const existing = await ctx.db
+      .query("resumeProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first()
+    if (!existing) {
+      throw new Error("No resume profile found. Upload your CV first.")
+    }
+    await ctx.db.patch(existing._id, { ...links, updatedAt: Date.now() })
   },
 })
 

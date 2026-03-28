@@ -174,6 +174,14 @@ export async function generateCoverLetterHelper(
     .filter(Boolean)
     .join("\n")
 
+  const linksSection = [
+    profile.githubUrl ? `GitHub: ${profile.githubUrl}` : "",
+    profile.linkedinUrl ? `LinkedIn: ${profile.linkedinUrl}` : "",
+    profile.portfolioUrl ? `Portfolio: ${profile.portfolioUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+
   const prompt = `You are writing a job application cover letter on behalf of a candidate.
 
 CANDIDATE PROFILE:
@@ -182,6 +190,7 @@ Skills: ${profile.skills.join(", ")}
 Experience: ${JSON.stringify(profile.experience)}
 Writing tone: ${profile.tone}
 Resume summary: ${profile.rawText}
+${linksSection ? `\nCANDIDATE LINKS:\n${linksSection}` : ""}
 ${prefsSection ? `\nCANDIDATE PREFERENCES:\n${prefsSection}` : ""}
 
 COMPANY: ${company}
@@ -198,7 +207,8 @@ Write a concise, personalised cover letter that:
 5. References specific details from the posting
 6. Sounds like a real person, not a template
 7. Is 3 short paragraphs max
-8. Ends with EXACTLY these two lines and NOTHING else after them:
+8. If the candidate has profile links (GitHub, LinkedIn, Portfolio) and the job description asks for them or they are clearly relevant (e.g. the job asks for a portfolio, code samples, or open-source contributions), naturally mention the relevant link(s) in the letter. Do NOT force links in if the job doesn't call for them.
+9. Ends with EXACTLY these two lines and NOTHING else after them:
 Best regards,
 ${candidateName}
 

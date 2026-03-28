@@ -8,10 +8,10 @@ export function stripHtml(html: string): string {
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&#x2F;/g, "/")
-    .replace(/&#x27;/g, "'")
     .replace(/&quot;/g, '"')
-    .replace(/&#\d+;/g, "")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
     .replace(/[^\S\n]+/g, " ")             // collapse spaces but keep newlines
     .replace(/\n\s*\n/g, "\n")             // collapse multiple blank lines
     .trim()

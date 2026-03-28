@@ -33,6 +33,7 @@ import {
   handleClear,
   handleStatus,
   handleJob,
+  handleLinks,
 } from "./telegramCommands"
 import { handleCallbackQuery } from "./telegramCallbacks"
 import {
@@ -139,6 +140,19 @@ export const processUpdate = internalAction({
         return
       }
       await handleStatus(ctx, botToken, chatId, link.userId, siteUrl)
+      return
+    }
+
+    if (text.startsWith("/links")) {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!link) {
+        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        return
+      }
+      await handleLinks(ctx, botToken, chatId, text, link.userId)
       return
     }
 

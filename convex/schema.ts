@@ -45,6 +45,9 @@ export default defineSchema({
     tone: v.string(),
     rawText: v.string(),
     fileId: v.optional(v.id("_storage")),
+    githubUrl: v.optional(v.string()),
+    linkedinUrl: v.optional(v.string()),
+    portfolioUrl: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 

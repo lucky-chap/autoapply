@@ -138,10 +138,11 @@ export const notifyAutoApplied = internalAction({
  * Dispatch top matches to Telegram — called after AI matching.
  * In auto mode: only processes jobs with emails, shows job info then auto-applies.
  * In manual mode: shows paginated card with Apply/Skip buttons (email-only jobs).
+ * Returns the number of matches dispatched (0 if nothing was sent).
  */
 export const dispatchMatchesToTelegram = internalAction({
   args: { userId: v.string() },
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { userId }): Promise<number> => {
     // Get user's Telegram link
     const link = await ctx.runQuery(
       internal.telegramLinks.getLinkByUserIdInternal,
@@ -149,7 +150,7 @@ export const dispatchMatchesToTelegram = internalAction({
     )
     if (!link) {
       console.log(`No Telegram link for ${userId}, skipping dispatch`)
-      return
+      return 0
     }
 
     // Get user settings (autoMode)
@@ -166,7 +167,7 @@ export const dispatchMatchesToTelegram = internalAction({
 
     if (topMatches.length === 0) {
       console.log(`No new email-bearing matches for ${userId}, skipping dispatch`)
-      return
+      return 0
     }
 
     const isAutoMode = settings?.autoMode === true
@@ -188,6 +189,8 @@ export const dispatchMatchesToTelegram = internalAction({
 
       console.log(`Dispatched paginated manual match card to Telegram for ${userId}`)
     }
+
+    return topMatches.length
   },
 })
 

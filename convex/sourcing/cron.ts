@@ -1,15 +1,19 @@
 import { internalAction } from "../_generated/server"
 import { internal } from "../_generated/api"
+import { v } from "convex/values"
 import { Id } from "../_generated/dataModel"
+import type { ActionCtx } from "../_generated/server"
 
 /**
  * Main cron entry point: polls job boards for all active users.
  *
  * Strategy:
  *  1. Collect distinct targetRoles across all onboarded users.
- *  2. Fetch jobs from Remotive + HN "Who is Hiring" (deduplicated).
- *  3. Prioritize jobs with emails for AI matching (saves Gemini budget).
- *  4. Evaluate jobs against each user's profile via AI matcher.
+ *  2. Run pipeline diagnostic per user (log warnings for blocked gates).
+ *  3. Fetch jobs from Remotive + HN "Who is Hiring" (deduplicated).
+ *  4. Prioritize jobs with emails for AI matching (saves Gemini budget).
+ *  5. Evaluate jobs against each user's profile via AI matcher.
+ *  6. Alert via Telegram when auto-mode users get zero dispatches.
  */
 export const pollJobBoards = internalAction({
   args: {},
@@ -25,7 +29,23 @@ export const pollJobBoards = internalAction({
 
     console.log(`JobBoard cron: ${activeUsers.length} active user(s)`)
 
-    // 2. Collect unique search terms from all users' target roles
+    // 2. Run pipeline diagnostic for each user
+    const userDiags: Record<string, PipelineDiagnostic> = {}
+    for (const user of activeUsers) {
+      const diag: PipelineDiagnostic = await ctx.runQuery(
+        internal.sourcing.cron.getPipelineDiagnostic,
+        { userId: user.userId }
+      )
+      userDiags[user.userId] = diag
+      const issues = getDiagnosticIssues(diag)
+      if (issues.length > 0) {
+        console.warn(`[Pipeline] ${user.userId}: ${issues.join(", ")}`)
+      } else {
+        console.log(`[Pipeline] ${user.userId}: all gates OK`)
+      }
+    }
+
+    // 3. Collect unique search terms from all users' target roles
     const allRoles = new Set<string>()
     const userRolesMap: Record<string, string[]> = {}
 
@@ -42,12 +62,19 @@ export const pollJobBoards = internalAction({
     }
 
     if (allRoles.size === 0) {
-      console.log("JobBoard cron: no target roles configured, skipping")
+      console.warn("JobBoard cron: no target roles configured, skipping")
+      for (const user of activeUsers) {
+        await alertUserIfLinked(
+          ctx,
+          user.userId,
+          "No target roles configured — the job sourcing pipeline is idle.\n\nSet your target roles on the web app to start receiving matches."
+        )
+      }
       return
     }
 
-    // 3. Fetch from all sources
-    // 3a. Remotive — one search per unique role
+    // 4. Fetch from all sources
+    // 4a. Remotive — one search per unique role
     for (const role of Array.from(allRoles)) {
       await ctx.runAction(internal.sourcing.remotive.fetchAndStore, {
         search: role,
@@ -55,19 +82,19 @@ export const pollJobBoards = internalAction({
       })
     }
 
-    // 3b. HN "Who is Hiring" — monthly thread, idempotent (deduped by commentId)
+    // 4b. HN "Who is Hiring" — monthly thread, idempotent (deduped by commentId)
     await ctx.runAction(internal.sourcing.hackernews.fetchAndStore, {})
 
-    // 4. Get jobs to evaluate, prioritizing those with emails
+    // 5. Get jobs to evaluate, prioritizing those with emails
     // Email jobs get 80% of the AI budget (auto-apply-able),
-    // plus a small batch of no-email jobs for manual-mode users.
+    // plus a batch of no-email jobs for manual-mode users.
     const emailJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
       internal.sourcing.store.getLatestListingsWithEmail,
-      { limit: 8 }
+      { limit: 16 }
     )
     const allJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
       internal.sourcing.store.getLatestListings,
-      { limit: 2 }
+      { limit: 4 }
     )
 
     // Merge and deduplicate
@@ -88,7 +115,7 @@ export const pollJobBoards = internalAction({
     const jobIdsToEvaluate = latestJobs.map((j) => j._id)
     console.log(`JobBoard cron: Evaluating ${jobIdsToEvaluate.length} jobs for ${activeUsers.length} users`)
 
-    // 5. Match jobs against each user
+    // 6. Match jobs against each user
     // Wrap in try/catch so a timeout or error in matching doesn't prevent
     // dispatching already-created matches from this or previous cycles.
     for (const user of activeUsers) {
@@ -105,25 +132,96 @@ export const pollJobBoards = internalAction({
       }
     }
 
-    // 6. Dispatch top matches to Telegram for each user
+    // 7. Dispatch top matches to Telegram for each user
     // This always runs, even if matching partially failed above,
     // so any matches created before the error still get sent.
+    let totalDispatched = 0
     for (const user of activeUsers) {
       try {
-        await ctx.runAction(
+        const dispatched: number = await ctx.runAction(
           internal.sourcing.telegramNotify.dispatchMatchesToTelegram,
           { userId: user.userId }
         )
+        totalDispatched += dispatched
       } catch (e) {
         console.error(`Telegram dispatch failed for ${user.userId}:`, e)
       }
     }
 
-    console.log("JobBoard cron: cycle complete")
+    // 8. Alert auto-mode users who got zero dispatches
+    if (totalDispatched === 0) {
+      console.warn("JobBoard cron: cycle complete with ZERO dispatches")
+      for (const user of activeUsers) {
+        const diag = userDiags[user.userId]
+        if (diag?.autoModeEnabled && diag?.hasTelegramLink) {
+          const issues = getDiagnosticIssues(diag)
+          if (issues.length > 0) {
+            await alertUserIfLinked(
+              ctx,
+              user.userId,
+              `Auto-apply cycle completed but no applications were sent.\n\n` +
+                `Issues detected:\n${issues.map((i) => `- ${i}`).join("\n")}\n\n` +
+                `Use /status to see your full pipeline health.`
+            )
+          }
+        }
+      }
+    } else {
+      console.log(`JobBoard cron: cycle complete, ${totalDispatched} match(es) dispatched`)
+    }
   },
 })
 
-// ---- Helper queries registered in this file for cron access ----
+// ── Pipeline diagnostic types & helpers ──
+
+interface PipelineDiagnostic {
+  hasResumeProfile: boolean
+  hasTargetRoles: boolean
+  hasTelegramLink: boolean
+  autoModeEnabled: boolean
+  hasGmailToken: boolean
+  pendingMatchCount: number
+  recentMatchCount: number
+  failedActionCount: number
+}
+
+function getDiagnosticIssues(diag: PipelineDiagnostic): string[] {
+  const issues: string[] = []
+  if (!diag.hasResumeProfile) issues.push("No resume uploaded")
+  if (!diag.hasTargetRoles) issues.push("No target roles configured")
+  if (!diag.hasTelegramLink) issues.push("Telegram not linked")
+  if (!diag.autoModeEnabled) issues.push("Auto mode is OFF")
+  if (!diag.hasGmailToken) issues.push("Gmail not connected (re-auth needed)")
+  if (diag.pendingMatchCount === 0 && diag.recentMatchCount === 0) {
+    issues.push("No matching jobs found this cycle")
+  }
+  if (diag.failedActionCount > 0) {
+    issues.push(`${diag.failedActionCount} email send(s) failed recently`)
+  }
+  return issues
+}
+
+async function alertUserIfLinked(
+  ctx: ActionCtx,
+  userId: string,
+  message: string
+) {
+  const link = await ctx.runQuery(
+    internal.telegramLinks.getLinkByUserIdInternal,
+    { userId }
+  )
+  if (!link) return
+  try {
+    await ctx.runAction(internal.telegram.sendNotification, {
+      chatId: link.telegramChatId,
+      text: `\u26a0\ufe0f <b>Pipeline Alert</b>\n\n${message}`,
+    })
+  } catch (e) {
+    console.error(`Failed to send pipeline alert to ${userId}:`, e)
+  }
+}
+
+// ---- Helper queries ----
 
 import { internalQuery } from "../_generated/server"
 
@@ -135,5 +233,78 @@ export const getActiveUsers = internalQuery({
       .query("userSettings")
       .take(200)
     return all.filter((u) => u.onboardingCompleted === true)
+  },
+})
+
+/**
+ * Pipeline health diagnostic for a single user.
+ * Checks every gate that can silently block auto-apply.
+ */
+export const getPipelineDiagnostic = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    const profile = await ctx.db
+      .query("resumeProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first()
+
+    const prefs = await ctx.db
+      .query("preferences")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first()
+
+    const telegramLink = await ctx.db
+      .query("telegramLinks")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first()
+
+    const settings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first()
+
+    const tokenData = await ctx.db
+      .query("userTokens")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first()
+
+    // Count unnotified "new" matches (pending dispatch)
+    const pendingMatches = await ctx.db
+      .query("userJobMatches")
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", userId).eq("status", "new")
+      )
+      .take(100)
+    const pendingMatchCount = pendingMatches.filter(
+      (m) => m.telegramNotified !== true
+    ).length
+
+    // Count recent matches (last 24h)
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000
+    const recentMatchCount = pendingMatches.filter(
+      (m) => m.createdAt > oneDayAgo
+    ).length
+
+    // Count failed actions in last 24h
+    const failedActions = await ctx.db
+      .query("pendingActions")
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", userId).eq("status", "failed")
+      )
+      .take(50)
+    const failedActionCount = failedActions.filter(
+      (a) => a.createdAt > oneDayAgo
+    ).length
+
+    return {
+      hasResumeProfile: profile !== null,
+      hasTargetRoles: (prefs?.targetRoles?.length ?? 0) > 0,
+      hasTelegramLink: telegramLink !== null,
+      autoModeEnabled: settings?.autoMode === true,
+      hasGmailToken: tokenData?.auth0RefreshToken != null,
+      pendingMatchCount,
+      recentMatchCount,
+      failedActionCount,
+    }
   },
 })

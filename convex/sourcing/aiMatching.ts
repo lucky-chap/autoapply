@@ -105,7 +105,7 @@ Analyze the match based on these criteria:
         }
 
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-2.0-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json",
@@ -169,9 +169,14 @@ Analyze the match based on these criteria:
           )
         }
 
-        // 6s delay → 10 RPM, safely under the free-tier limit for gemini-2.5-flash
-        await new Promise((resolve) => setTimeout(resolve, 6000))
-      } catch (e) {
+        // 4s delay to stay within free-tier RPM limits
+        await new Promise((resolve) => setTimeout(resolve, 4000))
+      } catch (e: any) {
+        // Stop entirely on quota exhaustion — no point burning through the loop
+        if (e?.status === 429 || e?.message?.includes("429") || e?.message?.includes("RESOURCE_EXHAUSTED")) {
+          console.warn(`Quota exhausted after ${matched} matches for ${userId}, stopping early`)
+          break
+        }
         console.error(`AI matching error for job ${jobId}:`, e)
       }
     }

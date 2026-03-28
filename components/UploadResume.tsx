@@ -10,14 +10,47 @@ import {
   Sparkles,
   Briefcase,
   Palette,
+  Github,
+  Linkedin,
+  Globe,
 } from "lucide-react"
 
 export function UploadResume({ userId }: { userId: string }) {
   const [isUploading, setIsUploading] = useState(false)
   const [isParsing, setIsParsing] = useState(false)
+  const [linksSaving, setLinksSaving] = useState(false)
+  const [githubUrl, setGithubUrl] = useState("")
+  const [linkedinUrl, setLinkedinUrl] = useState("")
+  const [portfolioUrl, setPortfolioUrl] = useState("")
+  const [linksInitialized, setLinksInitialized] = useState(false)
   const generateUploadUrl = useMutation(api.resumeProfiles.generateUploadUrl)
   const upsertResume = useMutation(api.resumeProfiles.upsert)
+  const updateLinks = useMutation(api.resumeProfiles.updateLinks)
   const profile = useQuery(api.resumeProfiles.getByUser, { userId })
+
+  // Initialize link fields from profile once loaded
+  if (profile && !linksInitialized) {
+    setGithubUrl(profile.githubUrl ?? "")
+    setLinkedinUrl(profile.linkedinUrl ?? "")
+    setPortfolioUrl(profile.portfolioUrl ?? "")
+    setLinksInitialized(true)
+  }
+
+  const handleSaveLinks = async () => {
+    setLinksSaving(true)
+    try {
+      await updateLinks({
+        userId,
+        githubUrl: githubUrl.trim() || undefined,
+        linkedinUrl: linkedinUrl.trim() || undefined,
+        portfolioUrl: portfolioUrl.trim() || undefined,
+      })
+    } catch (error) {
+      console.error("Failed to save links:", error)
+    } finally {
+      setLinksSaving(false)
+    }
+  }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -190,6 +223,57 @@ export function UploadResume({ userId }: { userId: string }) {
                 {profile.tone}
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Links */}
+      {hasProfile && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <h3 className="mb-4 font-display text-lg font-bold text-primary">
+            Profile Links
+          </h3>
+          <p className="mb-4 text-sm text-gray-500">
+            Optional. When relevant, the AI will include these in your cover letters.
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Github className="h-5 w-5 shrink-0 text-gray-400" />
+              <input
+                type="url"
+                placeholder="https://github.com/username"
+                value={githubUrl}
+                onChange={(e) => setGithubUrl(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Linkedin className="h-5 w-5 shrink-0 text-gray-400" />
+              <input
+                type="url"
+                placeholder="https://linkedin.com/in/username"
+                value={linkedinUrl}
+                onChange={(e) => setLinkedinUrl(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Globe className="h-5 w-5 shrink-0 text-gray-400" />
+              <input
+                type="url"
+                placeholder="https://yourportfolio.com"
+                value={portfolioUrl}
+                onChange={(e) => setPortfolioUrl(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <button
+              onClick={handleSaveLinks}
+              disabled={linksSaving}
+              className="mt-2 inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+            >
+              {linksSaving ? "Saving..." : "Save Links"}
+            </button>
           </div>
         </div>
       )}

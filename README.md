@@ -198,6 +198,16 @@ Token Vault lets the Convex backend get **fresh Google access tokens** for any u
 
 Without this, Google access tokens expire after ~1 hour and background operations fail with `401 UNAUTHENTICATED`.
 
+### Why not the Auth0 AI SDK (`Auth0AI` / `withTokenVault`)?
+
+The Auth0 AI SDK provides a convenient `withTokenVault()` wrapper for Token Vault integration, but it's designed for **HTTP framework middleware** (Express, Next.js route handlers, etc.) where it wraps a request handler and injects tokens via context. Our token exchange runs inside **Convex actions** — a serverless runtime with its own execution model that doesn't support middleware wrapping. Additionally:
+
+- **Custom caching**: We encrypt and cache tokens in the Convex database (`userTokens` table) so cron jobs and background actions can reuse them without re-exchanging on every invocation. The SDK doesn't support plugging in a custom Convex-backed cache.
+- **Encryption at rest**: We apply AES-256-GCM encryption to all stored tokens. The SDK doesn't handle this.
+- **Background execution**: Token exchange is called from cron-triggered actions (inbox checking, auto-apply, follow-ups) with no user request context. The SDK assumes a user-initiated HTTP request flow.
+
+Under the hood, our implementation performs the **exact same OAuth token exchange** as the SDK — same Auth0 `/oauth/token` endpoint, same `federated-connection-access-token` grant type, same `connection: "google-oauth2"` parameter — just adapted to work within Convex's serverless action runtime. See [`convex/tokenVault.ts`](convex/tokenVault.ts) for the implementation.
+
 ### How it works
 
 1. When a user interacts with the web app (sends an application or links Telegram), their **Auth0 refresh token** is captured and stored encrypted in Convex (`userTokens` table)

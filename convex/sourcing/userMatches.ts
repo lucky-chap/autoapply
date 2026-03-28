@@ -33,11 +33,11 @@ export const getMatchesForUser = query({
         .take(50)
     }
 
-    // Join with job listing data
+    // Join with job listing data — only include jobs with a recruiter email
     const results = []
     for (const match of matches) {
       const job = await ctx.db.get(match.jobListingId)
-      if (job) {
+      if (job && job.email) {
         results.push({ ...match, job })
       }
     }
