@@ -5,11 +5,11 @@ import {
   ArrowRight,
   FileText,
   LayoutDashboard,
-  Plus,
   Settings2,
   ShieldCheck,
   Sparkles,
   Star,
+  Users,
 } from "lucide-react"
 import {
   ApplicationsTable,
@@ -26,20 +26,20 @@ import { DiscoveredJobs } from "@/components/DiscoveredJobs"
 
 const quickActions = [
   {
-    title: "New application",
-    detail: "Paste a job description and generate a tailored send flow.",
-    href: "/dashboard/new",
+    title: "Outreach pipeline",
+    detail: "View your active sequences, sent emails, and reply tracking.",
+    href: "/dashboard",
     dark: false,
   },
   {
     title: "Resume profile",
-    detail: "Keep your resume data updated for stronger personalization.",
+    detail: "Keep your sender context updated for stronger personalization.",
     href: "/dashboard/resume",
     dark: true,
   },
   {
     title: "Preferences",
-    detail: "Set role, location, and salary targets for better matching.",
+    detail: "Set target roles and industries for better outreach matching.",
     href: "/dashboard/preferences",
     dark: true,
   },
@@ -99,15 +99,15 @@ export default async function DashboardPage() {
               className="inline-flex items-center gap-2 font-display text-lg font-semibold"
             >
               <Star className="h-4 w-4 fill-black" />
-              AutoApply Dashboard
+              OutreachAgent
             </Link>
 
             <nav className="hidden items-center gap-6 text-xs font-semibold tracking-[0.08em] text-black/70 uppercase md:flex">
               <a href="#overview" className="hover:text-black">
                 Overview
               </a>
-              <a href="#applications" className="hover:text-black">
-                Applications
+              <a href="#pipeline" className="hover:text-black">
+                Pipeline
               </a>
               <a href="#tools" className="hover:text-black">
                 Tools
@@ -118,8 +118,8 @@ export default async function DashboardPage() {
               href="/dashboard/new"
               className="inline-flex items-center gap-1 rounded-lg border border-black/20 bg-white px-4 py-2 text-xs font-semibold tracking-[0.08em] uppercase"
             >
-              <Plus className="h-3.5 w-3.5" />
-              New application
+              <Users className="h-3.5 w-3.5" />
+              Sync contacts
             </Link>
           </div>
 
@@ -132,8 +132,8 @@ export default async function DashboardPage() {
                 Welcome back, {user.name?.split(" ")[0]}
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-black/65 sm:text-base">
-                Manage approvals, send better outreach, and track reply momentum
-                from one workflow.
+                Manage outreach sequences, approve AI-generated emails, and
+                track engagement from one dashboard.
               </p>
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <Link
@@ -164,7 +164,7 @@ export default async function DashboardPage() {
               Tools
             </span>
             <p className="max-w-xl text-sm text-black/65">
-              Use shortcuts to move through your application process quickly.
+              Manage your outreach pipeline and sender profile.
             </p>
           </div>
 
@@ -199,7 +199,7 @@ export default async function DashboardPage() {
         </section>
 
         <section
-          id="applications"
+          id="pipeline"
           className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr_0.85fr]"
         >
           <div className="space-y-6">
@@ -213,10 +213,10 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between border-b border-white/20 p-5">
                 <div>
                   <h2 className="font-display text-2xl font-semibold">
-                    Applications
+                    Outreach history
                   </h2>
                   <p className="text-sm text-white/70">
-                    Recent sends and status updates.
+                    Recent sends and engagement tracking.
                   </p>
                 </div>
                 <span className="rounded bg-[#b8ff66] px-3 py-1 text-xs font-semibold text-black uppercase">
@@ -234,10 +234,10 @@ export default async function DashboardPage() {
               <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#b8ff66] text-black">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <h3 className="text-lg font-semibold">Daily pro tip</h3>
+              <h3 className="text-lg font-semibold">Outreach tip</h3>
               <p className="mt-2 text-sm leading-relaxed text-white/75">
-                Mention 2 exact requirements from the job post in your first
-                paragraph to boost reply rates.
+                Reference a specific detail about the contact&apos;s company in your
+                first sentence to boost reply rates by 2-3x.
               </p>
             </article>
 

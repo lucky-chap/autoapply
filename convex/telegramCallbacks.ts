@@ -60,6 +60,13 @@ export async function handleCallbackQuery(
     await handleJobApply(ctx, botToken, chatId, messageId, callbackQuery.id, data)
   } else if (data.startsWith("job_skip:")) {
     await handleJobSkip(ctx, botToken, chatId, messageId, callbackQuery.id, data)
+  } else if (data.startsWith("outreach_approve:")) {
+    // Reuse the same approve flow — pendingActions handles everything
+    const remapped = data.replace("outreach_approve:", "approve:")
+    await handleApprove(ctx, botToken, chatId, messageId, callbackQuery.id, remapped)
+  } else if (data.startsWith("outreach_reject:")) {
+    const remapped = data.replace("outreach_reject:", "reject:")
+    await handleReject(ctx, botToken, chatId, messageId, callbackQuery.id, remapped)
   }
 }
 

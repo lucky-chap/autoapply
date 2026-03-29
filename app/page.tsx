@@ -7,68 +7,69 @@ import {
   MapPin,
   Megaphone,
   Play,
-  Search,
   ShieldCheck,
   Sparkles,
   Star,
+  Users,
+  Zap,
 } from "lucide-react"
 
 const brands = [
   "Auth0",
   "Convex",
   "Gmail API",
+  "HubSpot",
+  "Gemini AI",
   "Telegram",
-  "GLM-5",
-  "Tracking",
 ]
 
 const services = [
   {
-    title: "Job match analysis",
+    title: "HubSpot CRM sync",
     description:
-      "Identify key requirements from each role and align your experience automatically.",
-    icon: Search,
+      "Pull contacts directly from your HubSpot pipeline. No manual imports or copy-pasting.",
+    icon: Users,
     dark: false,
   },
   {
-    title: "AI cover letter drafting",
+    title: "AI email generation",
     description:
-      "Generate personalized, role-specific letters in seconds from one job description.",
+      "Gemini crafts hyper-personalized cold emails and follow-ups based on each contact's role and company.",
     icon: Sparkles,
     dark: true,
   },
   {
-    title: "Email sending workflow",
+    title: "Native Gmail delivery",
     description:
-      "Send applications from your own Gmail with clear approval controls.",
+      "Emails send from your real inbox via Auth0 Token Vault. Maximum deliverability, zero spam flags.",
     icon: Mail,
     dark: true,
   },
   {
     title: "Security + approvals",
     description:
-      "Protect every send request with step-up checks before dispatch.",
+      "Preview every email in Telegram before it sends, or enable auto mode for zero-touch outreach.",
     icon: ShieldCheck,
     dark: false,
   },
 ]
 
 const studies = [
-  "One candidate increased interview callbacks by 35% in 4 weeks using targeted outreach.",
-  "A product manager reached 8 final-round interviews with role-specific application messaging.",
-  "A career coach scaled applications for clients with reusable templates and approval workflows.",
+  "An agency booked 12 discovery calls in 3 weeks using AI-personalized outreach across 200 contacts.",
+  "A founder reached 8 VPs of Engineering with tailored messaging — 3 replied within 48 hours.",
+  "A sales team replaced their SDR toolstack with one Telegram bot and a HubSpot integration.",
 ]
 
 const plans = [
   {
     name: "Starter",
     price: "$0",
-    detail: "Try the full workflow with basic limits.",
+    detail: "Sync up to 50 contacts and send with manual approval.",
   },
   {
     name: "Pro",
-    price: "$29",
-    detail: "Designed for active job seekers who apply at scale.",
+    price: "$49",
+    detail: "Unlimited contacts, auto mode, multi-step sequences, and reply tracking.",
   },
 ]
 
@@ -85,12 +86,12 @@ export default async function Home() {
             className="inline-flex items-center gap-2 font-display text-xl font-semibold"
           >
             <Star className="h-4 w-4 fill-black" />
-            AutoApply
+            OutreachAgent
           </Link>
 
           <nav className="hidden items-center gap-5 text-xs font-semibold tracking-[0.08em] text-black/70 uppercase md:flex">
             <a href="#about" className="hover:text-black">
-              About us
+              About
             </a>
             <a href="#services" className="hover:text-black">
               Features
@@ -100,9 +101,6 @@ export default async function Home() {
             </a>
             <a href="#pricing" className="hover:text-black">
               Pricing
-            </a>
-            <a href="#" className="hover:text-black">
-              Blog
             </a>
           </nav>
 
@@ -117,18 +115,18 @@ export default async function Home() {
         <section className="mt-10 grid items-center gap-10 lg:grid-cols-[1fr_0.95fr]">
           <div>
             <h1 className="max-w-xl font-display text-4xl leading-tight font-semibold sm:text-5xl">
-              Automate your job applications with confidence
+              Your autonomous AI sales development rep
             </h1>
             <p className="mt-5 max-w-md text-sm leading-relaxed text-black/65">
-              AutoApply helps you upload your resume, generate tailored cover
-              letters, send via your own Gmail, and track replies in one
-              workflow.
+              OutreachAgent syncs contacts from HubSpot, generates
+              hyper-personalized emails with AI, and sends them natively through
+              your Gmail — all managed from Telegram.
             </p>
             <a
               href={primaryHref}
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#121212] px-5 py-3 text-xs font-semibold tracking-[0.08em] text-white uppercase"
             >
-              Book a consultation
+              Start outreach
               <ArrowRight className="h-4 w-4" />
             </a>
           </div>
@@ -172,8 +170,8 @@ export default async function Home() {
               Features
             </span>
             <p className="max-w-xl text-sm text-black/65">
-              AutoApply gives you everything needed to move faster while keeping
-              quality and control.
+              Everything you need to run autonomous B2B outreach with quality and
+              control.
             </p>
           </div>
 
@@ -227,23 +225,24 @@ export default async function Home() {
           <div className="grid items-center gap-6 md:grid-cols-[1fr_0.6fr]">
             <div>
               <h2 className="font-display text-3xl font-semibold">
-                Let&apos;s get your next role faster
+                10x your outbound without writing a single email
               </h2>
               <p className="mt-3 max-w-lg text-sm leading-relaxed text-black/65">
-                Tell us your target role and we&apos;ll help you set up a repeatable
-                application system with better conversion.
+                Connect your HubSpot CRM, upload your resume for sender context,
+                and let AI handle personalized outreach while you focus on
+                closing deals.
               </p>
               <a
                 href={primaryHref}
                 className="mt-5 inline-flex rounded-lg bg-[#121212] px-4 py-2 text-xs font-semibold tracking-[0.08em] text-white uppercase"
               >
-                Get your free setup
+                Get started free
               </a>
             </div>
 
             <div className="flex items-center justify-center">
               <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-black text-white">
-                <Sparkles className="h-7 w-7" />
+                <Zap className="h-7 w-7" />
                 <div className="absolute -bottom-3 -right-2 h-8 w-8 rounded-full bg-[#b8ff66]" />
               </div>
             </div>
@@ -253,10 +252,10 @@ export default async function Home() {
         <section id="case-study" className="mt-10">
           <div className="flex flex-wrap items-center gap-4">
             <span className="rounded bg-[#b8ff66] px-2.5 py-1 text-2xl font-semibold leading-none">
-              Case studies
+              Use cases
             </span>
             <p className="max-w-xl text-sm text-black/65">
-              Real examples from candidates and teams using AutoApply.
+              How teams use OutreachAgent to book more meetings.
             </p>
           </div>
 

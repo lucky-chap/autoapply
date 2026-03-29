@@ -24,7 +24,7 @@ export async function handleStart(
     internal.telegramLinks.getLinkByTelegramChatId,
     { telegramChatId: chatId }
   )
-  let greeting = "👋 <b>Welcome to AutoApply Bot!</b>\n\n"
+  let greeting = "👋 <b>Welcome to OutreachAgent!</b>\n\n"
   if (existingLink) {
     try {
       const mgmtToken = await getAuth0ManagementToken()
@@ -40,18 +40,18 @@ export async function handleStart(
     botToken,
     chatId,
     greeting +
-      "I can help you apply to jobs directly from Telegram.\n\n" +
-      "1️⃣ First, link your account: /link (you can skip this step if you are already logged in)\n" +
-      "2️⃣ Use /job then paste a job description\n" +
-      "3️⃣ Approve the send with one tap\n\n" +
-      "Commands:\n" +
-      "/link — Link your AutoApply account\n" +
-      "/unlink — Unlink your account\n" +
-      "/job — Paste a job description\n" +
-      "/status — Check your recent applications\n" +
-      "/salary — Set minimum salary alert\n" +
-      "/links — Set GitHub, LinkedIn, portfolio URLs\n" +
+      "Your AI-powered B2B outreach agent. I sync contacts from HubSpot, generate personalized emails, and send them through your Gmail — all from Telegram.\n\n" +
+      "1️⃣ Link your account: /link\n" +
+      "2️⃣ Sync contacts: /sync\n" +
+      "3️⃣ Review & approve outreach with one tap\n\n" +
+      "<b>Commands:</b>\n" +
+      "/sync — Sync contacts from HubSpot CRM\n" +
+      "/outreach — View outreach pipeline & stats\n" +
       "/auto — Toggle auto mode (send without approval)\n" +
+      "/status — Check pipeline health\n" +
+      "/link — Link your account\n" +
+      "/unlink — Unlink your account\n" +
+      "/links — Set GitHub, LinkedIn, portfolio URLs\n" +
       "/clear — Clear all pending chat state"
   )
 }
@@ -95,8 +95,8 @@ export async function handleLink(
   await sendMessage(
     botToken,
     chatId,
-    "🔗 <b>Link your AutoApply account</b>\n\n" +
-      `Open this link while logged in to AutoApply:\n${linkUrl}\n\n` +
+    "🔗 <b>Link your OutreachAgent account</b>\n\n" +
+      `Open this link while logged in:\n${linkUrl}\n\n` +
       "<i>This link expires in 15 minutes.</i>"
   )
 }
@@ -221,8 +221,8 @@ export async function handleAuto(
       botToken,
       chatId,
       "🤖 <b>Auto Mode: ON</b>\n\n" +
-        "Applications will now be sent <b>automatically</b> without requiring your approval.\n\n" +
-        "⚠️ Cover letters will be generated and emailed immediately when you send a job description.\n\n" +
+        "Outreach emails will now be sent <b>automatically</b> without requiring your approval.\n\n" +
+        "⚠️ AI-generated emails will be dispatched immediately to your contacts.\n\n" +
         "Use /auto again to turn it off."
     )
   } else {
@@ -230,7 +230,7 @@ export async function handleAuto(
       botToken,
       chatId,
       "✋ <b>Auto Mode: OFF</b>\n\n" +
-        "Applications will require your approval before sending.\n\n" +
+        "Outreach emails will require your approval before sending.\n\n" +
         "Use /auto again to turn it on."
     )
   }
@@ -272,20 +272,11 @@ export async function handleStatus(
 
   const check = (ok: boolean) => (ok ? "\u2705" : "\u274c")
   const healthLines = [
-    `${check(true)} Onboarding completed`,
     `${check(diag.hasResumeProfile)} Resume uploaded`,
-    `${check(diag.hasTargetRoles)} Target roles configured`,
     `${check(diag.hasTelegramLink)} Telegram linked`,
     `${check(diag.autoModeEnabled)} Auto mode enabled`,
     `${check(diag.hasGmailToken)} Gmail connected`,
   ]
-
-  const matchInfo = diag.recentMatchCount > 0
-    ? `${diag.recentMatchCount} match(es) in last 24h`
-    : "No matches in last 24h"
-  healthLines.push(
-    `${check(diag.recentMatchCount > 0)} ${matchInfo}`
-  )
 
   if (diag.failedActionCount > 0) {
     healthLines.push(
@@ -293,15 +284,8 @@ export async function handleStatus(
     )
   }
 
-  if (diag.pendingMatchCount > 0) {
-    healthLines.push(
-      `\u2139\ufe0f ${diag.pendingMatchCount} match(es) awaiting dispatch`
-    )
-  }
-
   const allOk =
     diag.hasResumeProfile &&
-    diag.hasTargetRoles &&
     diag.hasTelegramLink &&
     diag.hasGmailToken &&
     diag.failedActionCount === 0
@@ -309,45 +293,31 @@ export async function handleStatus(
   const headerEmoji = allOk ? "\u2705" : "\u26a0\ufe0f"
   const headerText = allOk
     ? "Pipeline is healthy"
-    : "Pipeline has issues — auto-apply may not work"
+    : "Pipeline has issues — outreach may not work"
 
   let msg = `${headerEmoji} <b>${headerText}</b>\n\n${healthLines.join("\n")}`
 
-  // Recent applications
-  const recent = await ctx.runQuery(
-    internal.applications.getRecentByUserInternal,
-    { userId, limit: 5 }
+  // Outreach stats
+  const stats = await ctx.runQuery(
+    internal.outbound.store.getOutreachStats,
+    { userId }
   )
 
-  if (recent.length > 0) {
-    const statusEmoji: Record<string, string> = {
-      Applied: "\ud83d\udce4",
-      Replied: "\ud83d\udcac",
-      Interview: "\ud83c\udfa4",
-      Offer: "\ud83c\udf89",
-      Rejected: "\u274c",
-    }
+  msg += `\n\n<b>Outreach Summary</b>\n\n` +
+    `📇 Contacts: ${stats.contactCount}\n` +
+    `🔄 Active sequences: ${stats.activeSequences}\n` +
+    `✅ Completed: ${stats.completedSequences}\n` +
+    `📤 Sent: ${stats.sent}  ·  👁 Opened: ${stats.opened}  ·  💬 Replied: ${stats.replied}`
 
-    const appLines = recent.map((app) => {
-      const emoji = statusEmoji[app.status ?? "Applied"] ?? "\ud83d\udce4"
-      const date = new Date(
-        app.emailSentAt ?? app.createdAt
-      ).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      })
-      const opens = app.openCount
-        ? ` \u00b7 ${app.openCount} open${app.openCount > 1 ? "s" : ""}`
-        : ""
-      return `${emoji} <b>${escapeHtml(app.company)}</b> — ${escapeHtml(app.role)}\n    ${app.status ?? "Applied"} \u00b7 ${date}${opens}`
-    })
-
-    msg += `\n\n<b>Recent Applications</b>\n\n${appLines.join("\n\n")}`
-  } else {
-    msg += "\n\nNo applications sent yet."
+  if (stats.failed > 0) {
+    msg += `\n❌ Failed: ${stats.failed}`
   }
 
-  msg += `\n\nView all on the dashboard:\n${siteUrl}/dashboard`
+  if (stats.contactCount === 0) {
+    msg += `\n\nNo contacts yet. Use /sync to pull from HubSpot.`
+  }
+
+  msg += `\n\nView dashboard:\n${siteUrl}/dashboard`
 
   await sendMessage(botToken, chatId, msg)
 }
@@ -466,4 +436,75 @@ export async function handleJob(
     chatId,
     "📋 <b>Ready for a job description!</b>\n\nPaste the job posting below and I'll process it."
   )
+}
+
+// ── /outreach ──
+
+export async function handleOutreach(
+  ctx: ActionCtx,
+  botToken: string,
+  chatId: string,
+  userId: string
+) {
+  const stats = await ctx.runQuery(
+    internal.outbound.store.getOutreachStats,
+    { userId }
+  )
+
+  const lines = [
+    `📊 <b>Outreach Pipeline</b>\n`,
+    `<b>Contacts synced:</b> ${stats.contactCount}`,
+    `<b>Active sequences:</b> ${stats.activeSequences}`,
+    `<b>Completed sequences:</b> ${stats.completedSequences}`,
+    ``,
+    `<b>Messages:</b>`,
+    `  Sent: ${stats.sent}`,
+    `  Opened: ${stats.opened}`,
+    `  Replied: ${stats.replied}`,
+    `  Failed: ${stats.failed}`,
+  ]
+
+  if (stats.contactCount === 0) {
+    lines.push(
+      ``,
+      `No contacts synced yet. Use /sync to pull contacts from HubSpot.`
+    )
+  }
+
+  await sendMessage(botToken, chatId, lines.join("\n"))
+}
+
+// ── /sync ──
+
+export async function handleSync(
+  ctx: ActionCtx,
+  botToken: string,
+  chatId: string
+) {
+  await sendMessage(
+    botToken,
+    chatId,
+    "🔄 <b>Syncing contacts from HubSpot...</b>\n\nThis may take a moment."
+  )
+
+  try {
+    await ctx.runAction(internal.outbound.hubspot.fetchAndSyncContacts, {})
+
+    const contactCount = await ctx.runQuery(
+      internal.outbound.store.getContactCount,
+      {}
+    )
+
+    await sendMessage(
+      botToken,
+      chatId,
+      `✅ <b>Sync complete!</b>\n\n${contactCount} contact(s) in database.\n\nUse /outreach to see your pipeline stats.`
+    )
+  } catch (err) {
+    await sendMessage(
+      botToken,
+      chatId,
+      `❌ <b>Sync failed</b>\n\n${escapeHtml(String(err))}`
+    )
+  }
 }

@@ -34,6 +34,8 @@ import {
   handleStatus,
   handleJob,
   handleLinks,
+  handleOutreach,
+  handleSync,
 } from "./telegramCommands"
 import { handleCallbackQuery } from "./telegramCallbacks"
 import {
@@ -164,11 +166,37 @@ export const processUpdate = internalAction({
       if (!link) {
         await sendMessage(
           botToken, chatId,
-          "⚠️ Your Telegram account is not linked yet.\n\nUse /link to connect your AutoApply account first."
+          "⚠️ Your Telegram account is not linked yet.\n\nUse /link to connect your account first."
         )
         return
       }
       await handleJob(ctx, botToken, chatId)
+      return
+    }
+
+    if (text === "/outreach") {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!link) {
+        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        return
+      }
+      await handleOutreach(ctx, botToken, chatId, link.userId)
+      return
+    }
+
+    if (text === "/sync") {
+      const link = await ctx.runQuery(
+        internal.telegramLinks.getLinkByTelegramChatId,
+        { telegramChatId: chatId }
+      )
+      if (!link) {
+        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        return
+      }
+      await handleSync(ctx, botToken, chatId)
       return
     }
 
@@ -181,7 +209,7 @@ export const processUpdate = internalAction({
     if (!link) {
       await sendMessage(
         botToken, chatId,
-        "⚠️ Your Telegram account is not linked yet.\n\nUse /link to connect your AutoApply account first."
+        "⚠️ Your Telegram account is not linked yet.\n\nUse /link to connect your account first."
       )
       return
     }
@@ -238,12 +266,11 @@ export const processUpdate = internalAction({
     await sendMessage(
       botToken, chatId,
       "💡 Use a command to get started:\n\n" +
-        "/job — Paste a job description\n" +
-        "/status — Check recent applications\n" +
-        "/salary — Set minimum salary alert\n" +
+        "/sync — Sync contacts from HubSpot\n" +
+        "/outreach — View outreach pipeline & stats\n" +
+        "/status — Check pipeline health\n" +
         "/auto — Toggle auto mode\n" +
-        "/clear — Clear chat state\n\n" +
-        "<i>Send /job first, then paste your job description.</i>"
+        "/clear — Clear chat state"
     )
   },
 })
@@ -410,16 +437,39 @@ export const executeApprovedAction = internalAction({
         applicationId,
       })
 
+      // If this was an outreach email, update its status + store the gmail thread ID
+      if (action.outreachMessageId) {
+        try {
+          await ctx.runMutation(internal.outbound.store.updateMessageStatus, {
+            id: action.outreachMessageId,
+            status: "sent",
+            gmailMessageId: gmailResult.id,
+            gmailThreadId: gmailResult.threadId,
+            sentAt: Date.now(),
+          })
+        } catch {
+          // Non-critical
+        }
+      }
+
       // Notify user via Telegram
       if (action.telegramChatId) {
-        const notifyText = isFollowUp
-          ? `📬 <b>Follow-up sent!</b>\n\n` +
+        let notifyText: string
+        if (action.outreachMessageId) {
+          notifyText = `📤 <b>Outreach sent!</b>\n\n` +
+            `<b>${escapeHtml(action.payload.company)}</b>\n` +
+            `📬 Sent to: ${escapeHtml(action.payload.to)}\n\n` +
+            `<i>I'll notify you when they reply.</i>`
+        } else if (isFollowUp) {
+          notifyText = `📬 <b>Follow-up sent!</b>\n\n` +
             `<b>${escapeHtml(action.payload.company)}</b> — ${escapeHtml(action.payload.role)}\n` +
             `📬 Sent to: ${escapeHtml(action.payload.to)}`
-          : `🎉 <b>Application sent!</b>\n\n` +
+        } else {
+          notifyText = `🎉 <b>Email sent!</b>\n\n` +
             `<b>${escapeHtml(action.payload.company)}</b> — ${escapeHtml(action.payload.role)}\n` +
             `📬 Sent to: ${escapeHtml(action.payload.to)}\n\n` +
             `<i>I'll notify you when they reply.</i>`
+        }
         await sendMessage(botToken, action.telegramChatId, notifyText)
       }
 
@@ -457,7 +507,7 @@ export const executeApprovedAction = internalAction({
           await sendMessage(
             botToken,
             action.telegramChatId,
-            `⚠️ <b>Failed to send application</b>\n\n` +
+            `⚠️ <b>Failed to send email</b>\n\n` +
               `${escapeHtml(action.payload.company)} — ${escapeHtml(action.payload.role)}\n` +
               `Error: ${escapeHtml(String(err))}`,
             {

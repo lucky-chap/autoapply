@@ -106,6 +106,7 @@ export default defineSchema({
     error: v.optional(v.string()),
     applicationId: v.optional(v.id("applications")),
     attachResume: v.optional(v.boolean()),
+    outreachMessageId: v.optional(v.id("outreachMessages")),
     createdAt: v.number(),
   }).index("by_userId_and_status", ["userId", "status"]),
 
@@ -224,4 +225,65 @@ export default defineSchema({
   })
     .index("by_userId_and_status", ["userId", "status"])
     .index("by_userId_and_jobListingId", ["userId", "jobListingId"]),
+
+  hubspotContacts: defineTable({
+    hubspotId: v.string(),
+    email: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    company: v.optional(v.string()),
+    jobTitle: v.optional(v.string()),
+    lifecycleStage: v.optional(v.string()),
+    lastActivityDate: v.optional(v.number()),
+    syncedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_hubspotId", ["hubspotId"])
+    .index("by_email", ["email"]),
+
+  outreachSequences: defineTable({
+    contactId: v.id("hubspotContacts"),
+    userId: v.string(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("completed"),
+      v.literal("bounced")
+    ),
+    stepCount: v.number(),
+    currentStep: v.number(),
+    nextSendAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId_and_status", ["userId", "status"])
+    .index("by_contactId", ["contactId"])
+    .index("by_nextSendAt", ["nextSendAt"]),
+
+  outreachMessages: defineTable({
+    sequenceId: v.id("outreachSequences"),
+    contactId: v.id("hubspotContacts"),
+    userId: v.string(),
+    step: v.number(),
+    subject: v.string(),
+    body: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("pending_approval"),
+      v.literal("sent"),
+      v.literal("opened"),
+      v.literal("replied"),
+      v.literal("failed")
+    ),
+    pendingActionId: v.optional(v.id("pendingActions")),
+    gmailMessageId: v.optional(v.string()),
+    gmailThreadId: v.optional(v.string()),
+    openCount: v.optional(v.number()),
+    sentAt: v.optional(v.number()),
+    openedAt: v.optional(v.number()),
+    repliedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_sequenceId", ["sequenceId"])
+    .index("by_userId_and_status", ["userId", "status"]),
 })

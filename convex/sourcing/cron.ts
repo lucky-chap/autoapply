@@ -148,27 +148,7 @@ export const pollJobBoards = internalAction({
       }
     }
 
-    // 8. Alert auto-mode users who got zero dispatches
-    if (totalDispatched === 0) {
-      console.warn("JobBoard cron: cycle complete with ZERO dispatches")
-      for (const user of activeUsers) {
-        const diag = userDiags[user.userId]
-        if (diag?.autoModeEnabled && diag?.hasTelegramLink) {
-          const issues = getDiagnosticIssues(diag)
-          if (issues.length > 0) {
-            await alertUserIfLinked(
-              ctx,
-              user.userId,
-              `Auto-apply cycle completed but no applications were sent.\n\n` +
-                `Issues detected:\n${issues.map((i) => `- ${i}`).join("\n")}\n\n` +
-                `Use /status to see your full pipeline health.`
-            )
-          }
-        }
-      }
-    } else {
-      console.log(`JobBoard cron: cycle complete, ${totalDispatched} match(es) dispatched`)
-    }
+    console.log(`JobBoard cron: cycle complete, ${totalDispatched} match(es) dispatched`)
   },
 })
 

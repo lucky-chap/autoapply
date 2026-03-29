@@ -1,6 +1,6 @@
-# AutoApply
+# OutreachAgent
 
-AI-powered job application automation. Upload your resume, paste a job description, and AutoApply generates a personalized cover letter and sends it via your Gmail — from the web dashboard or a Telegram bot.
+AI-powered autonomous B2B outreach agent. Sync contacts from HubSpot, generate hyper-personalized cold emails with AI, and send them natively through your Gmail — managed entirely from Telegram.
 
 ## Quick Start
 
@@ -11,6 +11,29 @@ npm run setup:telegram     # Register Telegram bot webhook
 npx convex dev             # Start Convex backend (terminal 1)
 pnpm dev                   # Start Next.js frontend (terminal 2)
 ```
+
+---
+
+## How It Works
+
+1. **Sync contacts** from HubSpot CRM via private app token (or CSV import)
+2. **AI generates** personalized outreach emails using Gemini, tailored to each contact's role and company
+3. **Sends natively** from your real Gmail inbox via Auth0 Token Vault — looks like you typed it yourself
+4. **Multi-step sequences**: Automated follow-ups with new angles every 3 days
+5. **Approve or auto-send**: Review each email in Telegram, or enable auto mode
+6. **Track engagement**: Open tracking via pixel, reply detection via Gmail thread monitoring
+7. **Telegram-native**: Manage your entire pipeline from `/sync`, `/outreach`, `/status` commands
+
+---
+
+## Architecture
+
+- **Convex** — Real-time backend with cron-driven outbound cycles
+- **HubSpot CRM v3** — Contact sync via private app token
+- **Gemini AI** — Personalized B2B email generation (cold + follow-ups)
+- **Auth0 Token Vault** — Secure Gmail OAuth without storing Google refresh tokens
+- **Telegram Bot** — Command center for approvals, stats, and sync
+- **Gmail API** — Native email delivery with open/reply tracking
 
 ---
 
@@ -95,22 +118,24 @@ AUTH0_CLIENT_ID=<your-web-app-client-id>
 AUTH0_CLIENT_SECRET=<your-web-app-client-secret>
 AUTH0_M2M_CLIENT_ID=<m2m-client-id>
 AUTH0_M2M_CLIENT_SECRET=<m2m-client-secret>
-GLM_API_KEY=<your-glm-api-key>
+GEMINI_API_KEY=<your-gemini-api-key>
 TELEGRAM_BOT_TOKEN=<bot-token-from-botfather>
 TELEGRAM_WEBHOOK_SECRET=<random-hex-string>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_CONVEX_SITE_URL=<your-convex-site-url>
 ENCRYPTION_SECRET=<random-32-character-string>
+HUBSPOT_ACCESS_TOKEN=<hubspot-private-app-token>
 ```
 
 **How to get these:**
 
 - **`AUTH0_CLIENT_ID` / `AUTH0_CLIENT_SECRET`** — These are the same credentials as in your `.env.local` (your Regular Web Application). The Convex backend uses them to exchange stored refresh tokens for fresh Google access tokens via Token Vault. Make sure the **Token Vault** grant type is enabled: Auth0 Dashboard → Applications → your app → **Advanced Settings → Grant Types → Token Vault** checkbox.
-- **`GLM_API_KEY`** — Sign up at [open.bigmodel.cn](https://open.bigmodel.cn/) and create an API key from the dashboard.
+- **`GEMINI_API_KEY`** — Get from [Google AI Studio](https://aistudio.google.com/apikey).
 - **`TELEGRAM_BOT_TOKEN`** — Open Telegram, message [@BotFather](https://t.me/BotFather), send `/newbot`, follow the prompts, and copy the token it gives you (looks like `123456789:ABCdefGhIjKlmNoPQRsTuVwXyZ`).
 - **`TELEGRAM_WEBHOOK_SECRET`** — Any random string used to verify webhook requests from Telegram. Generate one with: `openssl rand -hex 32`
 - **`NEXT_PUBLIC_SITE_URL`** — Your app's public URL (`http://localhost:3000` for dev, your production domain when deployed). Used in the Telegram linking flow.
 - **`NEXT_PUBLIC_CONVEX_SITE_URL`** (**required**) — Your Convex deployment's HTTP Actions URL (e.g. `https://<your-slug>.convex.site`). Found in your Convex dashboard under Deployment Settings. **Must be set in both `.env.local` and as a Convex env var** — it's used for the email open tracking pixel and the Telegram webhook endpoint. Without this, email open tracking will not work.
+- **`HUBSPOT_ACCESS_TOKEN`** — Create a private app in HubSpot (Settings → Integrations → Private Apps) with `crm.objects.contacts.read` scope. Copy the access token.
 - **`AUTH0_M2M_CLIENT_ID` / `AUTH0_M2M_CLIENT_SECRET`** — Create or use an existing Machine-to-Machine application in Auth0:
   1. Go to Auth0 Dashboard → Applications → **Create Application** → select **Machine to Machine** (or use the existing **API Explorer Application**)
   2. Copy the **Client ID** and **Client Secret** from the application's **Settings** page
@@ -178,8 +203,8 @@ This calls the Telegram API to point your bot's webhook at your Convex HTTP endp
 1. User opens the bot on Telegram and types `/link`
 2. Bot sends a temporary link (expires in 15 minutes)
 3. User clicks the link and authenticates on the web app
-4. Their Telegram chat is now linked to their AutoApply account
-5. They can send job descriptions directly to the bot to apply
+4. Their Telegram chat is now linked to their OutreachAgent account
+5. They can manage outreach pipelines directly from the bot
 
 ### Troubleshooting
 
@@ -193,29 +218,20 @@ This calls the Telegram API to point your bot's webhook at your Convex HTTP endp
 
 Token Vault lets the Convex backend get **fresh Google access tokens** for any user without requiring an active browser session. This is used by:
 
-- The **Telegram bot** when sending emails on behalf of users
-- The **cron inbox checker** that monitors for recruiter replies
+- The **Telegram bot** when sending outreach emails on behalf of users
+- The **cron outbound cycle** that generates and dispatches outreach sequences
+- The **reply tracker** that monitors Gmail threads for contact responses
 
 Without this, Google access tokens expire after ~1 hour and background operations fail with `401 UNAUTHENTICATED`.
 
-### Why not the Auth0 AI SDK (`Auth0AI` / `withTokenVault`)?
-
-The Auth0 AI SDK provides a convenient `withTokenVault()` wrapper for Token Vault integration, but it's designed for **HTTP framework middleware** (Express, Next.js route handlers, etc.) where it wraps a request handler and injects tokens via context. Our token exchange runs inside **Convex actions** — a serverless runtime with its own execution model that doesn't support middleware wrapping. Additionally:
-
-- **Custom caching**: We encrypt and cache tokens in the Convex database (`userTokens` table) so cron jobs and background actions can reuse them without re-exchanging on every invocation. The SDK doesn't support plugging in a custom Convex-backed cache.
-- **Encryption at rest**: We apply AES-256-GCM encryption to all stored tokens. The SDK doesn't handle this.
-- **Background execution**: Token exchange is called from cron-triggered actions (inbox checking, auto-apply, follow-ups) with no user request context. The SDK assumes a user-initiated HTTP request flow.
-
-Under the hood, our implementation performs the **exact same OAuth token exchange** as the SDK — same Auth0 `/oauth/token` endpoint, same `federated-connection-access-token` grant type, same `connection: "google-oauth2"` parameter — just adapted to work within Convex's serverless action runtime. See [`convex/tokenVault.ts`](convex/tokenVault.ts) for the implementation.
-
 ### How it works
 
-1. When a user interacts with the web app (sends an application or links Telegram), their **Auth0 refresh token** is captured and stored encrypted in Convex (`userTokens` table)
+1. When a user interacts with the web app (links Telegram or connects Gmail), their **Auth0 refresh token** is captured and stored encrypted in Convex (`userTokens` table)
 2. When the backend needs a Google token, it calls `getGmailTokenViaTokenVault()` which first checks for a **cached Google access token** — if still valid (with a 5-minute buffer), it returns it immediately without calling Auth0
 3. If no cached token or it's expired, the function exchanges the Auth0 refresh token at Auth0's `/oauth/token` endpoint using the Token Vault grant type
 4. Auth0's Token Vault manages Google's refresh tokens server-side — we never see or store them. Auth0 uses its stored Google credentials to return a **fresh Google access token** (~1 hour validity)
 5. The fresh token is encrypted and cached in Convex (`cachedAccessToken` + `accessTokenExpiresAt` fields) for reuse
-6. The backend uses the token to call Gmail/Calendar APIs
+6. The backend uses the token to call Gmail APIs
 
 ### Token lifecycle
 
@@ -240,8 +256,8 @@ Cron/Telegram needs Google API → getGmailTokenViaTokenVault()
 **Key points:**
 - The **Auth0 refresh token** is long-lived and only changes if the user logs in again. It's our "ticket" to request Google tokens.
 - **Google's refresh token** is managed entirely by Auth0's Token Vault server-side — we never see it.
-- The **Google access token** is the short-lived token (~1h) we cache to avoid calling Auth0 on every cron cycle (every 5 minutes per user).
-- Token Vault **requires refresh token rotation to be OFF** on the Auth0 app. Auth0 recommends DPoP as the alternative security mechanism.
+- The **Google access token** is the short-lived token (~1h) we cache to avoid calling Auth0 on every cron cycle.
+- Token Vault **requires refresh token rotation to be OFF** on the Auth0 app.
 
 ### Setup
 
@@ -266,23 +282,23 @@ Cron/Telegram needs Google API → getGmailTokenViaTokenVault()
 
 ### Troubleshooting
 
-- **"No refresh token stored for this user"**: The user needs to use the web app at least once (send an application or link Telegram) so the app can capture their Auth0 refresh token.
+- **"No refresh token stored for this user"**: The user needs to use the web app at least once so the app can capture their Auth0 refresh token.
 - **"Token Vault exchange failed (400)"**: The Token Vault grant type may not be enabled on your Auth0 app. Check Advanced Settings → Grant Types → Token Vault.
 - **"Token Vault exchange failed (403)"**: The user hasn't connected their Google account via the Permissions page yet. They need to connect Google first.
-- **"Unknown or invalid refresh token"**: The stored refresh token may have expired or been revoked. The user needs to log out and log back in, then perform any action on the web app to refresh the stored token.
+- **"Unknown or invalid refresh token"**: The stored refresh token may have expired or been revoked. The user needs to log out and log back in.
 
 ---
 
-## 🏗️ Architecture & Security Patterns
+## Architecture & Security Patterns
 
-AutoApply is designed as a **Production-Aware Agentic System**, fulfilling the _Authorized to Act_ Hackathon's requirements by **leveraging** the Auth0 for AI Agents platform:
+OutreachAgent is designed as a **Production-Aware Agentic System**, leveraging the Auth0 for AI Agents platform:
 
 ### 1. Asynchronous Authorization (Async Auth)
 
-The app implements **Decoupled User Consent** via Telegram. This allows the backend agent to initiate a high-stakes action (like an application send) and seek approval on a separate device (mobile phone) via the Telegram bot.
+The app implements **Decoupled User Consent** via Telegram. This allows the backend agent to generate an outreach email and seek approval on a separate device (mobile phone) via the Telegram bot.
 
 - **Leveraging Auth0**: The core **Async Auth** engine is the **Auth0 Token Vault**. It handles the secure, backend-to-backend exchange of the user's stored, encrypted Refresh Token for a fresh Gmail Access Token.
-- **Why Telegram?**: While tools like **Auth0 Guardian** are excellent for "Yes/No" binary security checks, an AI Agent needs a **Rich Interaction Channel**. Telegram allows the user to **edit the cover letter draft** directly in the chat before finally providing authorization.
+- **Why Telegram?**: While tools like **Auth0 Guardian** are excellent for "Yes/No" binary security checks, an AI Agent needs a **Rich Interaction Channel**. Telegram allows the user to **preview the AI-generated outreach email** and approve or reject it before dispatch.
 
 ### 2. Step-Up Authentication
 
@@ -293,28 +309,9 @@ High-stakes transactions (sending an email via your real Gmail account) are prot
 
 ### 3. Defense-in-Depth for Token Storage
 
-To satisfy the "Security Model" criteria, all persistent tokens required for background agents are protected with:
+All persistent tokens required for background agents are protected with:
 
 - **Encryption at Rest**: AES-256-GCM using a server-side `ENCRYPTION_SECRET`. Both the stored Auth0 refresh token and the cached Google access token are encrypted.
 - **Access Token Caching**: Google access tokens are cached (encrypted) with their expiry to minimize Auth0 Token Vault API calls. The cache is refreshed 5 minutes before expiry to prevent mid-use token expiration.
-
-**Why not just use Auth0 + Convex Session Auth?**
-Even if Convex is configured to recognize your Auth0 `ID Token` natively, that token is short-lived (usually 1 hour). More importantly, it is only available when a user is actively sending a request from their browser. Processes like **Telegram Webhooks** and **Background Crons** do not have access to your browser's Auth0 session.
-
-**Why not "No Storage" (Option 2)?**
-Removing storage entirely would mean the Telegram bot and Cron jobs could never obtain a fresh Google Access Token once the initial ephemeral login session expired. This would transform AutoApply from an autonomous agent into a simple web-form.
-
-### Defense in Depth
-
-To mitigate the risk of storing these "Master Keys":
-
-- **Encryption at Rest**: Both the Auth0 refresh token and cached Google access token are encrypted using **AES-256-GCM** before being saved to Convex.
-- **Environment Isolation**: The decryption key (`ENCRYPTION_SECRET`) is never stored in the database; it only exists as a server-side environment variable.
-- **Scope Limitation**: The tokens only grant the specific permissions (`gmail.send`, `gmail.readonly`, `calendar`) authorized by the user, not full account access.
-- **Token Vault Delegation**: Google's refresh token is never exposed to our application — Auth0's Token Vault manages it server-side. We only store the Auth0 refresh token (our "ticket" to request Google access tokens) and cache the short-lived Google access tokens.
-
-===
-
-Alternatives exist (like only using Auth0 Token Vault server-side without storing anything yourself), but they'd require the user to have an active session for every action — which breaks your Telegram bot and cron job use cases.
-
-So yes, it's fine for your architecture. Just make sure your encryption key is strong and rotated if ever compromised.
+- **Scope Limitation**: The tokens only grant the specific permissions (`gmail.send`, `gmail.readonly`) authorized by the user, not full account access.
+- **Token Vault Delegation**: Google's refresh token is never exposed to our application — Auth0's Token Vault manages it server-side.

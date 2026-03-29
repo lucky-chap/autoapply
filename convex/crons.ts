@@ -52,4 +52,25 @@ crons.interval(
   {}
 )
 
+crons.interval(
+  "sync HubSpot contacts",
+  { hours: 6 },
+  internal.outbound.hubspot.fetchAndSyncContacts,
+  {}
+)
+
+crons.interval(
+  "run outbound email cycle",
+  { hours: 4 },
+  internal.outbound.cron.runOutboundCycle,
+  {}
+)
+
+crons.interval(
+  "check outreach replies",
+  { hours: 1 },
+  internal.outbound.tracking.checkOutreachReplies,
+  {}
+)
+
 export default crons

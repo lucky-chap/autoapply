@@ -45,6 +45,36 @@ http.route({
   }),
 })
 
+// Outreach email open tracking pixel
+http.route({
+  path: "/track/outreach-open",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url)
+    const messageId = url.searchParams.get("id")
+
+    if (messageId) {
+      try {
+        await ctx.runMutation(internal.outbound.store.recordMessageOpen, {
+          id: messageId as Id<"outreachMessages">,
+        })
+      } catch {
+        // Silently fail — don't break the pixel response
+      }
+    }
+
+    return new Response(TRACKING_PIXEL, {
+      status: 200,
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    })
+  }),
+})
+
 // Store refresh token — called from Next.js API routes with a shared secret
 http.route({
   path: "/api/store-refresh-token",
