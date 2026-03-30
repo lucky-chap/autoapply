@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils"
 import { Auth0Provider } from "@auth0/nextjs-auth0/client"
 import { auth0 } from "@/lib/auth0"
 import { ConvexClientProvider } from "@/components/ConvexClientProvider"
+import { Toaster } from "sonner"
 
 export const metadata: Metadata = {
-  title: "AutoApply — AI Agent That Actually Applies For You",
+  title: "DevStandup AI — AI Actions You Actually Approve",
   description:
-    "Upload your CV, paste a job description, and let AutoApply draft personalized cover letters and send them via your own Gmail account.",
+    "Turn your developer activity into AI-proposed actions across Slack and Gmail. Every operation is visible, explainable, and user-approved.",
 }
 
 const manrope = Manrope({
@@ -41,7 +42,7 @@ export default async function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={cn(
-        "antialiased",
+        "antialiased dark",
         manrope.variable,
         sora.variable,
         fontMono.variable,
@@ -52,7 +53,10 @@ export default async function RootLayout({
         <Auth0Provider user={session?.user}>
           <ConvexClientProvider>
             <ThemeProvider>
-              <main className="min-h-screen bg-white">{children}</main>
+              <main className="min-h-screen bg-zinc-950 text-white">
+                {children}
+              </main>
+              <Toaster theme="dark" />
             </ThemeProvider>
           </ConvexClientProvider>
         </Auth0Provider>

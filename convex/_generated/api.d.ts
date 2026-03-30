@@ -8,46 +8,12 @@
  * @module
  */
 
-import type * as aiActions from "../aiActions.js";
-import type * as applications from "../applications.js";
-import type * as auth0 from "../auth0.js";
-import type * as calendar from "../calendar.js";
-import type * as chatCleanup from "../chatCleanup.js";
+import type * as actionHistory from "../actionHistory.js";
+import type * as agentActions from "../agentActions.js";
 import type * as crons from "../crons.js";
-import type * as followUp from "../followUp.js";
 import type * as http from "../http.js";
-import type * as inboxChecker from "../inboxChecker.js";
-import type * as interviewScheduler from "../interviewScheduler.js";
-import type * as openclaw from "../openclaw.js";
-import type * as outbound_aiOutreach from "../outbound/aiOutreach.js";
-import type * as outbound_cron from "../outbound/cron.js";
-import type * as outbound_hubspot from "../outbound/hubspot.js";
-import type * as outbound_sendOutreach from "../outbound/sendOutreach.js";
-import type * as outbound_store from "../outbound/store.js";
-import type * as outbound_tracking from "../outbound/tracking.js";
-import type * as pendingActions from "../pendingActions.js";
-import type * as preferences from "../preferences.js";
-import type * as replyClassifier from "../replyClassifier.js";
-import type * as resumeProfiles from "../resumeProfiles.js";
-import type * as sourcing_aiMatching from "../sourcing/aiMatching.js";
-import type * as sourcing_cleanup from "../sourcing/cleanup.js";
-import type * as sourcing_cron from "../sourcing/cron.js";
-import type * as sourcing_hackernews from "../sourcing/hackernews.js";
-import type * as sourcing_queries from "../sourcing/queries.js";
-import type * as sourcing_remotive from "../sourcing/remotive.js";
-import type * as sourcing_store from "../sourcing/store.js";
-import type * as sourcing_telegramNotify from "../sourcing/telegramNotify.js";
-import type * as sourcing_textUtils from "../sourcing/textUtils.js";
-import type * as sourcing_userMatches from "../sourcing/userMatches.js";
-import type * as telegram from "../telegram.js";
-import type * as telegramCallbacks from "../telegramCallbacks.js";
-import type * as telegramCommands from "../telegramCommands.js";
-import type * as telegramHelpers from "../telegramHelpers.js";
-import type * as telegramJobFlow from "../telegramJobFlow.js";
-import type * as telegramLinks from "../telegramLinks.js";
-import type * as tokenVault from "../tokenVault.js";
-import type * as userSettings from "../userSettings.js";
-import type * as userTokens from "../userTokens.js";
+import type * as standupSessions from "../standupSessions.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -56,46 +22,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  aiActions: typeof aiActions;
-  applications: typeof applications;
-  auth0: typeof auth0;
-  calendar: typeof calendar;
-  chatCleanup: typeof chatCleanup;
+  actionHistory: typeof actionHistory;
+  agentActions: typeof agentActions;
   crons: typeof crons;
-  followUp: typeof followUp;
   http: typeof http;
-  inboxChecker: typeof inboxChecker;
-  interviewScheduler: typeof interviewScheduler;
-  openclaw: typeof openclaw;
-  "outbound/aiOutreach": typeof outbound_aiOutreach;
-  "outbound/cron": typeof outbound_cron;
-  "outbound/hubspot": typeof outbound_hubspot;
-  "outbound/sendOutreach": typeof outbound_sendOutreach;
-  "outbound/store": typeof outbound_store;
-  "outbound/tracking": typeof outbound_tracking;
-  pendingActions: typeof pendingActions;
-  preferences: typeof preferences;
-  replyClassifier: typeof replyClassifier;
-  resumeProfiles: typeof resumeProfiles;
-  "sourcing/aiMatching": typeof sourcing_aiMatching;
-  "sourcing/cleanup": typeof sourcing_cleanup;
-  "sourcing/cron": typeof sourcing_cron;
-  "sourcing/hackernews": typeof sourcing_hackernews;
-  "sourcing/queries": typeof sourcing_queries;
-  "sourcing/remotive": typeof sourcing_remotive;
-  "sourcing/store": typeof sourcing_store;
-  "sourcing/telegramNotify": typeof sourcing_telegramNotify;
-  "sourcing/textUtils": typeof sourcing_textUtils;
-  "sourcing/userMatches": typeof sourcing_userMatches;
-  telegram: typeof telegram;
-  telegramCallbacks: typeof telegramCallbacks;
-  telegramCommands: typeof telegramCommands;
-  telegramHelpers: typeof telegramHelpers;
-  telegramJobFlow: typeof telegramJobFlow;
-  telegramLinks: typeof telegramLinks;
-  tokenVault: typeof tokenVault;
-  userSettings: typeof userSettings;
-  userTokens: typeof userTokens;
+  standupSessions: typeof standupSessions;
+  users: typeof users;
 }>;
 
 /**

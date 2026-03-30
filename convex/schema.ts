@@ -2,288 +2,81 @@ import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
 export default defineSchema({
-  applications: defineTable({
-    userId: v.string(),
-    company: v.string(),
-    role: v.string(),
-    status: v.union(
-      v.literal("Applied"),
-      v.literal("Replied"),
-      v.literal("Interview"),
-      v.literal("Offer"),
-      v.literal("Rejected")
-    ),
-    coverLetter: v.string(),
-    recipientEmail: v.string(),
-    gmailThreadId: v.optional(v.string()),
-    lastCheckedGmailMsgId: v.optional(v.string()),
-    followUpSentAt: v.optional(v.number()),
-    emailSentAt: v.optional(v.number()),
-    openCount: v.optional(v.number()),
-    schedulingLink: v.optional(v.string()),
-    proposedTimes: v.optional(v.array(v.string())),
-    source: v.optional(v.union(v.literal("web"), v.literal("telegram"))),
-    createdAt: v.number(),
-  }).index("by_user", ["userId"]),
-
-  emailOpens: defineTable({
-    applicationId: v.id("applications"),
-    openedAt: v.number(),
-    userAgent: v.optional(v.string()),
-  }).index("by_applicationId", ["applicationId"]),
-
-  resumeProfiles: defineTable({
-    userId: v.string(),
-    skills: v.array(v.string()),
-    experience: v.array(
+  users: defineTable({
+    tokenIdentifier: v.string(),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    settings: v.optional(
       v.object({
-        title: v.string(),
-        company: v.string(),
-        years: v.number(),
+        defaultStandupTime: v.optional(v.string()),
+        timezone: v.optional(v.string()),
+        autoGenerateStandup: v.optional(v.boolean()),
       })
     ),
-    tone: v.string(),
-    rawText: v.string(),
-    fileId: v.optional(v.id("_storage")),
-    githubUrl: v.optional(v.string()),
-    linkedinUrl: v.optional(v.string()),
-    portfolioUrl: v.optional(v.string()),
+    createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_user", ["userId"]),
+  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
-  preferences: defineTable({
-    userId: v.string(),
-    targetRoles: v.array(v.string()),
-    targetLocations: v.array(v.string()),
-    minSalary: v.optional(v.number()),
+  standupSessions: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    githubActivity: v.optional(v.string()),
+    generatedContent: v.optional(v.string()),
+    status: v.union(
+      v.literal("gathering"),
+      v.literal("drafting"),
+      v.literal("ready"),
+      v.literal("distributed")
+    ),
+    createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_user", ["userId"]),
+  }).index("by_userId_and_date", ["userId", "date"]),
 
-  telegramLinks: defineTable({
-    userId: v.string(),
-    telegramChatId: v.string(),
-    linkedAt: v.number(),
-  })
-    .index("by_userId", ["userId"])
-    .index("by_telegramChatId", ["telegramChatId"]),
-
-  linkingCodes: defineTable({
-    code: v.string(),
-    telegramChatId: v.string(),
-    expiresAt: v.number(),
-  }).index("by_code", ["code"]),
-
-  userTokens: defineTable({
-    userId: v.string(),
-    auth0RefreshToken: v.string(),
-    cachedAccessToken: v.optional(v.string()),
-    accessTokenExpiresAt: v.optional(v.number()),
-    updatedAt: v.number(),
-  }).index("by_userId", ["userId"]),
-
-  pendingActions: defineTable({
-    userId: v.string(),
-    actionType: v.literal("send_email"),
+  agentActions: defineTable({
+    sessionId: v.id("standupSessions"),
+    userId: v.id("users"),
+    agentName: v.union(
+      v.literal("github"),
+      v.literal("writer"),
+      v.literal("slack"),
+      v.literal("gmail")
+    ),
+    platform: v.string(),
+    actionType: v.string(),
+    content: v.string(),
+    metadata: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),
-      v.literal("rejected"),
+      v.literal("skipped"),
+      v.literal("executing"),
       v.literal("executed"),
+      v.literal("undone"),
       v.literal("failed")
     ),
-    payload: v.object({
-      to: v.string(),
-      subject: v.string(),
-      body: v.string(),
-      company: v.string(),
-      role: v.string(),
-      coverLetter: v.string(),
-    }),
-    telegramMessageId: v.optional(v.string()),
-    telegramChatId: v.optional(v.string()),
-    source: v.union(v.literal("telegram"), v.literal("web")),
-    resolvedAt: v.optional(v.number()),
+    confidence: v.optional(v.number()),
+    reasoning: v.optional(v.string()),
+    scope: v.optional(v.string()),
+    isHighStakes: v.boolean(),
+    stepUpCompleted: v.optional(v.boolean()),
+    approvedAt: v.optional(v.number()),
+    executedAt: v.optional(v.number()),
+    undoneAt: v.optional(v.number()),
+    undoDeadline: v.optional(v.number()),
     error: v.optional(v.string()),
-    applicationId: v.optional(v.id("applications")),
-    attachResume: v.optional(v.boolean()),
-    outreachMessageId: v.optional(v.id("outreachMessages")),
     createdAt: v.number(),
-  }).index("by_userId_and_status", ["userId", "status"]),
-
-  telegramUpdates: defineTable({
-    updateId: v.number(),
-    processedAt: v.number(),
-  }).index("by_updateId", ["updateId"]),
-
-  pendingEmailInput: defineTable({
-    telegramChatId: v.string(),
-    jobDescription: v.string(),
-    company: v.string(),
-    role: v.string(),
-    createdAt: v.number(),
-  }).index("by_telegramChatId", ["telegramChatId"]),
-
-  messageBuffer: defineTable({
-    telegramChatId: v.string(),
-    parts: v.array(v.string()),
-    lastMessageAt: v.number(),
-  }).index("by_telegramChatId", ["telegramChatId"]),
-
-  jobInputMode: defineTable({
-    telegramChatId: v.string(),
-    createdAt: v.number(),
-  }).index("by_telegramChatId", ["telegramChatId"]),
-
-  pendingSalaryReview: defineTable({
-    telegramChatId: v.string(),
-    userId: v.string(),
-    jobDescription: v.string(),
-    company: v.string(),
-    role: v.string(),
-    email: v.string(),
-    salary: v.number(),
-    createdAt: v.number(),
-  }).index("by_telegramChatId", ["telegramChatId"]),
-
-  userSettings: defineTable({
-    userId: v.string(),
-    autoMode: v.boolean(),
-    autoModeEnabledAt: v.optional(v.number()),
-    onboardingCompleted: v.boolean(),
-    openclawGatewayUrl: v.optional(v.string()),
-    openclawGatewayToken: v.optional(v.string()),
-    openclawEnabled: v.optional(v.boolean()),
-    availabilitySchedule: v.optional(
-      v.array(
-        v.object({
-          day: v.number(),
-          enabled: v.boolean(),
-          startHour: v.number(),
-          startMinute: v.number(),
-          endHour: v.number(),
-          endMinute: v.number(),
-        })
-      )
-    ),
-  }).index("by_user", ["userId"]),
-
-  pendingCalendarSlots: defineTable({
-    applicationId: v.id("applications"),
-    telegramChatId: v.string(),
-    slots: v.array(
-      v.object({
-        label: v.string(),
-        start: v.string(),
-        end: v.string(),
-      })
-    ),
-    proposedTimeStatus: v.array(
-      v.object({
-        label: v.string(),
-        available: v.union(v.boolean(), v.null()),
-      })
-    ),
-    createdAt: v.number(),
-  }).index("by_applicationId_and_telegramChatId", [
-    "applicationId",
-    "telegramChatId",
-  ]),
-
-  jobListings: defineTable({
-    externalId: v.string(),
-    source: v.string(),
-    title: v.string(),
-    company: v.string(),
-    description: v.string(),
-    url: v.string(),
-    location: v.string(),
-    salary: v.optional(v.string()),
-    category: v.optional(v.string()),
-    postedAt: v.optional(v.number()),
-    fetchedAt: v.number(),
-    email: v.optional(v.string()),
-    hasEmail: v.optional(v.boolean()),
-  })
-    .index("by_source_and_externalId", ["source", "externalId"])
-    .index("by_fetchedAt", ["fetchedAt"])
-    .index("by_hasEmail_and_fetchedAt", ["hasEmail", "fetchedAt"]),
-
-  userJobMatches: defineTable({
-    userId: v.string(),
-    jobListingId: v.id("jobListings"),
-    status: v.union(
-      v.literal("new"),
-      v.literal("ignored"),
-      v.literal("approved"),
-      v.literal("applied")
-    ),
-    matchScore: v.optional(v.number()),
-    matchReasoning: v.optional(v.string()),
-    telegramNotified: v.optional(v.boolean()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
   })
     .index("by_userId_and_status", ["userId", "status"])
-    .index("by_userId_and_jobListingId", ["userId", "jobListingId"]),
+    .index("by_sessionId", ["sessionId"]),
 
-  hubspotContacts: defineTable({
-    hubspotId: v.string(),
-    email: v.string(),
-    firstName: v.string(),
-    lastName: v.string(),
-    company: v.optional(v.string()),
-    jobTitle: v.optional(v.string()),
-    lifecycleStage: v.optional(v.string()),
-    lastActivityDate: v.optional(v.number()),
-    syncedAt: v.number(),
-    createdAt: v.number(),
+  actionHistory: defineTable({
+    actionId: v.id("agentActions"),
+    userId: v.id("users"),
+    event: v.string(),
+    details: v.optional(v.string()),
+    timestamp: v.number(),
   })
-    .index("by_hubspotId", ["hubspotId"])
-    .index("by_email", ["email"]),
-
-  outreachSequences: defineTable({
-    contactId: v.id("hubspotContacts"),
-    userId: v.string(),
-    status: v.union(
-      v.literal("active"),
-      v.literal("paused"),
-      v.literal("completed"),
-      v.literal("bounced")
-    ),
-    stepCount: v.number(),
-    currentStep: v.number(),
-    nextSendAt: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_userId_and_status", ["userId", "status"])
-    .index("by_contactId", ["contactId"])
-    .index("by_nextSendAt", ["nextSendAt"]),
-
-  outreachMessages: defineTable({
-    sequenceId: v.id("outreachSequences"),
-    contactId: v.id("hubspotContacts"),
-    userId: v.string(),
-    step: v.number(),
-    subject: v.string(),
-    body: v.string(),
-    status: v.union(
-      v.literal("draft"),
-      v.literal("pending_approval"),
-      v.literal("sent"),
-      v.literal("opened"),
-      v.literal("replied"),
-      v.literal("failed")
-    ),
-    pendingActionId: v.optional(v.id("pendingActions")),
-    gmailMessageId: v.optional(v.string()),
-    gmailThreadId: v.optional(v.string()),
-    openCount: v.optional(v.number()),
-    sentAt: v.optional(v.number()),
-    openedAt: v.optional(v.number()),
-    repliedAt: v.optional(v.number()),
-    createdAt: v.number(),
-  })
-    .index("by_sequenceId", ["sequenceId"])
-    .index("by_userId_and_status", ["userId", "status"]),
+    .index("by_userId", ["userId"])
+    .index("by_actionId", ["actionId"]),
 })

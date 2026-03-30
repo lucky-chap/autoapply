@@ -41,4 +41,5 @@ phases.md
 criteria.md
 demo/
 ts-vercel-ai/
+ts-vercel-ai/src/
 .agents/

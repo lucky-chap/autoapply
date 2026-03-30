@@ -1,301 +1,247 @@
-import { auth0 } from "@/lib/auth0"
 import Link from "next/link"
 import {
   ArrowRight,
-  Heart,
+  GitBranch,
   Mail,
-  MapPin,
-  Megaphone,
-  Play,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Users,
+  MessageSquare,
+  Shield,
+  Eye,
+  Undo2,
   Zap,
 } from "lucide-react"
+import { auth0 } from "@/lib/auth0"
 
-const brands = [
-  "Auth0",
-  "Convex",
-  "Gmail API",
-  "HubSpot",
-  "Gemini AI",
-  "Telegram",
-]
-
-const services = [
+const features = [
   {
-    title: "HubSpot CRM sync",
+    icon: GitBranch,
+    title: "GitHub Activity",
     description:
-      "Pull contacts directly from your HubSpot pipeline. No manual imports or copy-pasting.",
-    icon: Users,
-    dark: false,
+      "Automatically reads your commits, PRs, and issues to generate meaningful standups.",
   },
   {
-    title: "AI email generation",
+    icon: MessageSquare,
+    title: "Multi-Platform Distribution",
     description:
-      "Gemini crafts hyper-personalized cold emails and follow-ups based on each contact's role and company.",
-    icon: Sparkles,
-    dark: true,
+      "Propose actions across Slack and Gmail with platform-specific tone and formatting.",
   },
   {
-    title: "Native Gmail delivery",
+    icon: Shield,
+    title: "Scoped Credentials",
     description:
-      "Emails send from your real inbox via Auth0 Token Vault. Maximum deliverability, zero spam flags.",
-    icon: Mail,
-    dark: true,
+      "Each agent uses isolated OAuth credentials via Auth0 Token Vault. One agent, one credential.",
   },
   {
-    title: "Security + approvals",
+    icon: Eye,
+    title: "Full Explainability",
     description:
-      "Preview every email in Telegram before it sends, or enable auto mode for zero-touch outreach.",
-    icon: ShieldCheck,
-    dark: false,
-  },
-]
-
-const studies = [
-  "An agency booked 12 discovery calls in 3 weeks using AI-personalized outreach across 200 contacts.",
-  "A founder reached 8 VPs of Engineering with tailored messaging — 3 replied within 48 hours.",
-  "A sales team replaced their SDR toolstack with one Telegram bot and a HubSpot integration.",
-]
-
-const plans = [
-  {
-    name: "Starter",
-    price: "$0",
-    detail: "Sync up to 50 contacts and send with manual approval.",
+      "Every action shows why it's proposed, what permission it needs, and a grounded confidence score.",
   },
   {
-    name: "Pro",
-    price: "$49",
-    detail: "Unlimited contacts, auto mode, multi-step sequences, and reply tracking.",
+    icon: Zap,
+    title: "Step-Up Auth",
+    description:
+      "High-stakes actions like email require re-authentication. Visual distinction keeps you aware.",
+  },
+  {
+    icon: Undo2,
+    title: "Undo Window",
+    description:
+      "Changed your mind? Undo any executed action within 30 seconds.",
   },
 ]
 
-export default async function Home() {
+export default async function LandingPage() {
   const session = await auth0.getSession()
-  const primaryHref = session ? "/dashboard" : "/auth/login"
-
+  const isLoggedIn = !!session
+  const ctaHref = isLoggedIn ? "/dashboard" : "/auth/login"
+  const ctaLabel = isLoggedIn ? "Go to Dashboard" : "Sign In"
   return (
-    <div className="min-h-screen bg-white">
-      <div className="mx-auto max-w-[930px] px-6 py-8 sm:px-10 sm:py-10">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 font-display text-xl font-semibold"
-          >
-            <Star className="h-4 w-4 fill-black" />
-            OutreachAgent
-          </Link>
-
-          <nav className="hidden items-center gap-5 text-xs font-semibold tracking-[0.08em] text-black/70 uppercase md:flex">
-            <a href="#about" className="hover:text-black">
-              About
-            </a>
-            <a href="#services" className="hover:text-black">
-              Features
-            </a>
-            <a href="#case-study" className="hover:text-black">
-              Use cases
-            </a>
-            <a href="#pricing" className="hover:text-black">
-              Pricing
-            </a>
-          </nav>
-
-          <a
-            href={primaryHref}
-            className="rounded-lg border border-black/25 bg-white px-4 py-2 text-xs font-semibold tracking-[0.08em] uppercase"
-          >
-            {session ? "Open dashboard" : "Start now"}
-          </a>
-        </header>
-
-        <section className="mt-10 grid items-center gap-10 lg:grid-cols-[1fr_0.95fr]">
-          <div>
-            <h1 className="max-w-xl font-display text-4xl leading-tight font-semibold sm:text-5xl">
-              Your autonomous AI sales development rep
-            </h1>
-            <p className="mt-5 max-w-md text-sm leading-relaxed text-black/65">
-              OutreachAgent syncs contacts from HubSpot, generates
-              hyper-personalized emails with AI, and sends them natively through
-              your Gmail — all managed from Telegram.
-            </p>
-            <a
-              href={primaryHref}
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#121212] px-5 py-3 text-xs font-semibold tracking-[0.08em] text-white uppercase"
-            >
-              Start outreach
-              <ArrowRight className="h-4 w-4" />
-            </a>
+    <div className="min-h-screen bg-zinc-950">
+      {/* Nav */}
+      <nav className="border-b border-zinc-800 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+              <Zap className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-display text-lg font-bold text-white">
+              DevStandup AI
+            </span>
           </div>
+          <Link
+            href={ctaHref}
+            className="px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-400 transition-colors"
+          >
+            {ctaLabel}
+          </Link>
+        </div>
+      </nav>
 
-          <div className="relative mx-auto w-full max-w-md">
-            <div className="relative h-[290px] rounded-2xl border border-black/10 bg-white">
-              <div className="absolute left-12 top-12 h-40 w-56 rotate-[-12deg] rounded-full border border-black/25" />
-              <div className="absolute left-10 top-20 h-36 w-56 rotate-[10deg] rounded-full border border-black/25" />
-              <div className="absolute right-20 top-20 flex h-28 w-28 items-center justify-center rounded-full bg-[#b8ff66]">
-                <Megaphone className="h-12 w-12 text-black" />
-              </div>
+      {/* Hero */}
+      <section className="px-6 pt-24 pb-16">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800 text-zinc-400 text-sm mb-6">
+            <Shield className="w-3.5 h-3.5" />
+            Powered by Auth0 Token Vault
+          </div>
+          <h1 className="text-5xl sm:text-6xl font-display font-bold text-white leading-tight mb-6">
+            AI acts — but only
+            <br />
+            <span className="text-emerald-400">with your permission</span>
+          </h1>
+          <p className="text-lg text-zinc-400 max-w-2xl mx-auto mb-10">
+            DevStandup AI turns your GitHub activity into actionable standups
+            and proposes distribution across your tools. You review, approve,
+            and control every action.
+          </p>
+          <div className="flex gap-4 justify-center">
+            <Link
+              href={ctaHref}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-emerald-500 text-white font-medium hover:bg-emerald-400 transition-colors"
+            >
+              {isLoggedIn ? "Go to Dashboard" : "Get Started"}
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
 
-              <div className="absolute left-4 top-8 flex h-8 w-8 items-center justify-center rounded-full bg-black text-white">
-                <Heart className="h-4 w-4" />
+      {/* Action Queue Preview */}
+      <section className="px-6 pb-20">
+        <div className="max-w-4xl mx-auto">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
+            <div className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-2">
+              Action Queue Preview
+            </div>
+
+            {/* Slack action card */}
+            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-5 h-5 text-purple-400" />
               </div>
-              <div className="absolute right-8 top-6 flex h-8 w-8 items-center justify-center rounded-full bg-[#b8ff66] text-black">
-                <Mail className="h-4 w-4" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-white">
+                    Slack Agent
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                    chat:write
+                  </span>
+                </div>
+                <p className="text-sm text-zinc-400 mb-2">
+                  Post standup to #engineering: &quot;Fixed auth middleware,
+                  merged PR #42, working on dashboard...&quot;
+                </p>
+                <div className="text-xs text-zinc-500">
+                  87% confident — based on 12 commits and 3 PRs
+                </div>
               </div>
-              <div className="absolute right-4 top-20 flex h-8 w-8 items-center justify-center rounded-full bg-black text-white">
-                <Play className="h-4 w-4 fill-white" />
+              <div className="flex gap-2 shrink-0">
+                <div className="px-3 py-1.5 rounded bg-emerald-500 text-white text-xs font-medium">
+                  Approve
+                </div>
+                <div className="px-3 py-1.5 rounded bg-zinc-700 text-zinc-300 text-xs font-medium">
+                  Skip
+                </div>
               </div>
-              <div className="absolute right-10 top-36 flex h-8 w-8 items-center justify-center rounded-full bg-[#b8ff66] text-black">
-                <MapPin className="h-4 w-4" />
+            </div>
+
+            {/* Gmail action card (high-stakes) */}
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0">
+                <Mail className="w-5 h-5 text-amber-400" />
               </div>
-              <Sparkles className="absolute bottom-8 left-6 h-5 w-5 text-black" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-white">
+                    Gmail Agent
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                    gmail.send
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-500/30 text-amber-300">
+                    Step-up required
+                  </span>
+                </div>
+                <p className="text-sm text-zinc-400 mb-2">
+                  Send weekly update to team@company.com with professional
+                  summary...
+                </p>
+                <div className="text-xs text-zinc-500">
+                  92% confident — comprehensive activity across 3 repos
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <div className="px-3 py-1.5 rounded bg-amber-500 text-white text-xs font-medium">
+                  Approve
+                </div>
+                <div className="px-3 py-1.5 rounded bg-zinc-700 text-zinc-300 text-xs font-medium">
+                  Skip
+                </div>
+              </div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="mt-10 grid grid-cols-3 gap-4 border-y border-black/15 py-6 text-center sm:grid-cols-6">
-          {brands.map((brand) => (
-            <p key={brand} className="text-sm font-semibold text-black/70">
-              {brand}
-            </p>
-          ))}
-        </section>
-
-        <section id="services" className="mt-10">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="rounded bg-[#b8ff66] px-2.5 py-1 text-2xl font-semibold leading-none">
-              Features
-            </span>
-            <p className="max-w-xl text-sm text-black/65">
-              Everything you need to run autonomous B2B outreach with quality and
-              control.
-            </p>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {services.map((service) => (
-              <article
-                key={service.title}
-                className={`rounded-3xl border p-6 ${
-                  service.dark
-                    ? "border-black/20 bg-[#171717] text-white"
-                    : "border-black/20 bg-white text-black"
-                }`}
+      {/* Features */}
+      <section className="px-6 pb-24">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-3xl font-display font-bold text-white text-center mb-4">
+            Built for trust and transparency
+          </h2>
+          <p className="text-zinc-400 text-center mb-12 max-w-2xl mx-auto">
+            Every AI operation is visible, explainable, and user-approved.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature) => (
+              <div
+                key={feature.title}
+                className="rounded-xl border border-zinc-800 bg-zinc-900 p-6"
               >
-                <service.icon className="h-5 w-5" />
-                <h3 className="mt-3 max-w-xs text-2xl leading-tight font-semibold">
-                  <span
-                    className={`${
-                      service.dark
-                        ? "bg-white text-black"
-                        : "bg-[#b8ff66] text-black"
-                    } px-1.5`}
-                  >
-                    {service.title}
-                  </span>
-                </h3>
-                <p
-                  className={`mt-4 text-sm leading-relaxed ${
-                    service.dark ? "text-white/75" : "text-black/65"
-                  }`}
-                >
-                  {service.description}
-                </p>
-                <div className="mt-5 flex items-center gap-2 text-sm font-semibold">
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                      service.dark
-                        ? "bg-white text-black"
-                        : "bg-black text-white"
-                    }`}
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </span>
-                  Learn more
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4">
+                  <feature.icon className="w-5 h-5 text-emerald-400" />
                 </div>
-              </article>
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-zinc-400">{feature.description}</p>
+              </div>
             ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section id="about" className="mt-10 rounded-3xl border border-black/10 bg-white p-6 sm:p-8">
-          <div className="grid items-center gap-6 md:grid-cols-[1fr_0.6fr]">
-            <div>
-              <h2 className="font-display text-3xl font-semibold">
-                10x your outbound without writing a single email
-              </h2>
-              <p className="mt-3 max-w-lg text-sm leading-relaxed text-black/65">
-                Connect your HubSpot CRM, upload your resume for sender context,
-                and let AI handle personalized outreach while you focus on
-                closing deals.
-              </p>
-              <a
-                href={primaryHref}
-                className="mt-5 inline-flex rounded-lg bg-[#121212] px-4 py-2 text-xs font-semibold tracking-[0.08em] text-white uppercase"
-              >
-                Get started free
-              </a>
-            </div>
-
-            <div className="flex items-center justify-center">
-              <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-black text-white">
-                <Zap className="h-7 w-7" />
-                <div className="absolute -bottom-3 -right-2 h-8 w-8 rounded-full bg-[#b8ff66]" />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="case-study" className="mt-10">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="rounded bg-[#b8ff66] px-2.5 py-1 text-2xl font-semibold leading-none">
-              Use cases
-            </span>
-            <p className="max-w-xl text-sm text-black/65">
-              How teams use OutreachAgent to book more meetings.
+      {/* CTA */}
+      <section className="px-6 pb-24">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-12">
+            <h2 className="text-3xl font-display font-bold text-white mb-4">
+              Your work proposes actions.
+              <br />
+              You approve them.
+            </h2>
+            <p className="text-zinc-400 mb-8">
+              From code to communication, with control.
             </p>
-          </div>
-
-          <div className="mt-6 rounded-3xl border border-black/20 bg-[#171717] p-6 text-white">
-            <div className="grid gap-5 md:grid-cols-3 md:divide-x md:divide-white/20">
-              {studies.map((study) => (
-                <article key={study} className="md:px-5 first:md:pl-0 last:md:pr-0">
-                  <p className="text-sm leading-relaxed text-white/80">{study}</p>
-                  <a
-                    href={primaryHref}
-                    className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#b8ff66]"
-                  >
-                    Learn more
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="pricing" className="mt-10 grid gap-4 sm:grid-cols-2">
-          {plans.map((plan, idx) => (
-            <article
-              key={plan.name}
-              className={`rounded-2xl border border-black/15 p-6 ${
-                idx === 1 ? "bg-[#171717] text-white" : "bg-white"
-              }`}
+            <Link
+              href={ctaHref}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-emerald-500 text-white font-medium hover:bg-emerald-400 transition-colors"
             >
-              <p className="text-xs font-semibold tracking-[0.08em] uppercase">
-                {plan.name}
-              </p>
-              <p className="mt-2 font-display text-4xl font-semibold">{plan.price}</p>
-              <p className={`mt-1 text-sm ${idx === 1 ? "text-white/75" : "text-black/65"}`}>
-                {plan.detail}
-              </p>
-            </article>
-          ))}
-        </section>
-      </div>
+              {isLoggedIn ? "Go to Dashboard" : "Start Building Your Standup"}
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-800 px-6 py-8">
+        <div className="max-w-6xl mx-auto flex items-center justify-between text-sm text-zinc-500">
+          <span>DevStandup AI</span>
+          <span>Built with Auth0 Token Vault + Convex + Gemini</span>
+        </div>
+      </footer>
     </div>
   )
 }
