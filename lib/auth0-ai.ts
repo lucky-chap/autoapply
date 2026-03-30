@@ -6,10 +6,10 @@ export const getAccessToken = async () => getAccessTokenFromTokenVault()
 
 const auth0AI = new Auth0AI()
 
-// GitHub connection — scopes set in Auth0 dashboard
+// GitHub connection — repo scope needed to read private repo activity
 export const withGitHub = auth0AI.withTokenVault({
   connection: "github",
-  scopes: [],
+  scopes: ["repo"],
   refreshToken: getRefreshToken,
   credentialsContext: "tool-call",
 })

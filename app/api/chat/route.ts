@@ -11,6 +11,7 @@ import { setAIContext } from "@auth0/ai-vercel"
 import { errorSerializer, withInterruptions } from "@auth0/ai-vercel/interrupts"
 
 import { githubActivityTool } from "@/lib/tools/github-activity"
+import { githubReposTool } from "@/lib/tools/github-repos"
 import { slackPostTool } from "@/lib/tools/slack-post"
 import { gmailSendTool } from "@/lib/tools/gmail-send"
 import { saveActionTool } from "@/lib/tools/save-action"
@@ -19,6 +20,9 @@ const SYSTEM_PROMPT = `You are DevStandup AI — an intelligent assistant that t
 
 Your workflow:
 1. When the user asks to generate a standup, use the githubActivityTool to fetch their recent GitHub activity.
+   - If the user specifies repos (e.g. "check my activity in owner/repo"), pass them in the "repos" parameter as ["owner/repo"].
+   - If no repos are specified, ask the user which repos to check, or search broadly across all repos.
+   - Using specific repos is more reliable and faster than broad search.
 2. Analyze the activity and generate a structured standup in this format:
    - **Yesterday**: What was accomplished (based on commits, merged PRs)
    - **Today**: What's planned (based on open PRs, issues)
@@ -49,6 +53,7 @@ export async function POST(req: NextRequest) {
 
   const tools = {
     githubActivityTool,
+    githubReposTool,
     slackPostTool,
     gmailSendTool,
     saveActionTool,

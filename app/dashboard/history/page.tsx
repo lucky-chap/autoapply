@@ -2,87 +2,93 @@
 
 import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
+import type { Id } from "@/convex/_generated/dataModel"
 import Link from "next/link"
-import {
-  Zap,
-  ArrowLeft,
-  Clock,
-  CheckCircle,
-  XCircle,
-  SkipForward,
-} from "lucide-react"
-
-const statusIcons: Record<string, typeof CheckCircle> = {
-  executed: CheckCircle,
-  skipped: SkipForward,
-  failed: XCircle,
-}
+import { Zap, ArrowLeft, Clock } from "lucide-react"
 
 const statusColors: Record<string, string> = {
-  gathering: "text-blue-400",
-  drafting: "text-yellow-400",
-  ready: "text-emerald-400",
-  distributed: "text-emerald-400",
+  gathering: "bg-neutral-100 text-neutral-700",
+  drafting: "bg-neutral-100 text-neutral-700",
+  ready: "bg-black text-white",
+  distributed: "bg-black text-white",
+}
+
+type SessionItem = {
+  _id: Id<"standupSessions">
+  date: string
+  status: string
+  createdAt: number
+  generatedContent?: string
 }
 
 export default function HistoryPage() {
   const sessions = useQuery(api.standupSessions.getRecent, { limit: 20 })
+  const recentSessions = (sessions ?? []) as SessionItem[]
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <header className="border-b border-zinc-800 px-6 py-3">
-        <div className="max-w-4xl mx-auto flex items-center gap-4">
+    <div className="relative min-h-screen bg-neutral-100 text-neutral-900">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-28 right-0 h-72 w-72 rounded-full bg-white blur-3xl" />
+      </div>
+
+      <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/90 px-6 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center gap-4">
           <Link
             href="/dashboard"
-            className="text-zinc-400 hover:text-white transition-colors"
+            className="grid h-8 w-8 place-items-center rounded-full border border-neutral-300 text-neutral-500 transition-colors hover:border-neutral-400 hover:text-neutral-900"
+            aria-label="Back to dashboard"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-emerald-400" />
-            <span className="font-display font-bold text-white">
-              Standup History
-            </span>
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-black text-white">
+              <Zap className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="font-display text-sm font-semibold text-neutral-900">Standup History</p>
+              <p className="text-xs text-neutral-500">Recent generated sessions</p>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        {!sessions || sessions.length === 0 ? (
-          <div className="text-center py-16">
-            <Clock className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-            <div className="text-zinc-400">No standup sessions yet.</div>
+      <div className="mx-auto max-w-5xl px-6 py-8">
+        {recentSessions.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-neutral-300 bg-white p-16 text-center shadow-sm">
+            <Clock className="mx-auto mb-4 h-12 w-12 text-neutral-400" />
+            <div className="mb-2 text-base font-semibold text-neutral-900">No standup sessions yet</div>
+            <div className="mb-5 text-sm text-neutral-500">Your generated sessions will appear here once you run your first standup.</div>
             <Link
               href="/dashboard"
-              className="text-emerald-400 text-sm hover:underline mt-2 inline-block"
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-black px-4 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
             >
               Generate your first standup
             </Link>
           </div>
         ) : (
           <div className="space-y-4">
-            {sessions.map((session: any) => (
+            {recentSessions.map((session) => (
               <div
                 key={session._id}
-                className="rounded-lg border border-zinc-800 bg-zinc-900 p-5"
+                className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-white">
-                      {session.date}
-                    </span>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-neutral-900">{session.date}</span>
                     <span
-                      className={`text-xs capitalize ${statusColors[session.status] ?? "text-zinc-400"}`}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+                        statusColors[session.status] ?? "bg-neutral-100 text-neutral-700"
+                      }`}
                     >
                       {session.status}
                     </span>
                   </div>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-neutral-500">
                     {new Date(session.createdAt).toLocaleTimeString()}
                   </span>
                 </div>
                 {session.generatedContent && (
-                  <div className="text-sm text-zinc-400 whitespace-pre-wrap line-clamp-4">
+                  <div className="line-clamp-4 whitespace-pre-wrap text-sm text-neutral-600">
                     {session.generatedContent}
                   </div>
                 )}

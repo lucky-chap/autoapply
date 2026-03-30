@@ -3,6 +3,7 @@
 import { useQuery } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import Link from "next/link"
+import Image from "next/image"
 import {
   Zap,
   ArrowLeft,
@@ -10,8 +11,8 @@ import {
   MessageSquare,
   Mail,
   ExternalLink,
+  Shield,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
 const connections = [
   {
@@ -21,7 +22,6 @@ const connections = [
     description:
       "Read your commits, pull requests, and issues to generate standups.",
     scopes: "repo:read, events:read",
-    color: "bg-zinc-500/20 text-zinc-400",
   },
   {
     id: "slack",
@@ -29,7 +29,6 @@ const connections = [
     icon: MessageSquare,
     description: "Post standup updates to your team channels.",
     scopes: "chat:write, channels:read",
-    color: "bg-purple-500/20 text-purple-400",
   },
   {
     id: "gmail",
@@ -38,7 +37,6 @@ const connections = [
     description:
       "Send professional standup emails. This is a high-stakes connection requiring step-up auth.",
     scopes: "gmail.compose, gmail.send",
-    color: "bg-amber-500/20 text-amber-400",
     highStakes: true,
   },
 ]
@@ -47,90 +45,94 @@ export default function SettingsPage() {
   const user = useQuery(api.users.getCurrent)
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <header className="border-b border-zinc-800 px-6 py-3">
-        <div className="max-w-4xl mx-auto flex items-center gap-4">
+    <div className="relative min-h-screen bg-neutral-100 text-neutral-900">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 left-0 h-72 w-72 rounded-full bg-white blur-3xl" />
+      </div>
+
+      <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/90 px-6 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center gap-4">
           <Link
             href="/dashboard"
-            className="text-zinc-400 hover:text-white transition-colors"
+            className="grid h-8 w-8 place-items-center rounded-full border border-neutral-300 text-neutral-500 transition-colors hover:border-neutral-400 hover:text-neutral-900"
+            aria-label="Back to dashboard"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-emerald-400" />
-            <span className="font-display font-bold text-white">Settings</span>
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-black text-white">
+              <Zap className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="font-display text-sm font-semibold text-neutral-900">Settings</p>
+              <p className="text-xs text-neutral-500">Security and connection management</p>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-        {/* Profile */}
+      <div className="mx-auto max-w-5xl space-y-8 px-6 py-8">
         <section>
-          <h2 className="text-lg font-semibold text-white mb-4">Profile</h2>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+          <h2 className="mb-4 text-lg font-semibold text-neutral-900">Profile</h2>
+          <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-4">
-              {user?.avatarUrl && (
-                <img
+              {user?.avatarUrl ? (
+                <Image
                   src={user.avatarUrl}
                   alt=""
-                  className="w-12 h-12 rounded-full"
+                  width={48}
+                  height={48}
+                  className="h-12 w-12 rounded-full border border-neutral-200"
                 />
+              ) : (
+                <div className="grid h-12 w-12 place-items-center rounded-full border border-neutral-200 bg-neutral-100 text-sm font-semibold text-neutral-700">
+                  {(user?.name ?? "U").charAt(0).toUpperCase()}
+                </div>
               )}
               <div>
-                <div className="text-white font-medium">
-                  {user?.name ?? "Loading..."}
-                </div>
-                <div className="text-sm text-zinc-400">{user?.email}</div>
+                <div className="font-medium text-neutral-900">{user?.name ?? "Loading..."}</div>
+                <div className="text-sm text-neutral-500">{user?.email ?? ""}</div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Connections */}
         <section>
-          <h2 className="text-lg font-semibold text-white mb-2">
-            Connected Accounts
-          </h2>
-          <p className="text-sm text-zinc-400 mb-4">
-            Connections are managed securely via Auth0 Token Vault. Each
-            connection uses isolated OAuth credentials with scoped permissions.
+          <h2 className="mb-2 text-lg font-semibold text-neutral-900">Connected Accounts</h2>
+          <p className="mb-4 max-w-3xl text-sm text-neutral-500">
+            Connections are managed securely via Auth0 Token Vault. Each integration uses isolated OAuth credentials with scoped permissions.
           </p>
+
           <div className="space-y-3">
             {connections.map((conn) => (
               <div
                 key={conn.id}
-                className={`rounded-lg border p-5 ${
+                className={`rounded-2xl border bg-white p-5 shadow-sm ${
                   conn.highStakes
-                    ? "border-amber-500/30 bg-amber-500/5"
-                    : "border-zinc-800 bg-zinc-900"
+                    ? "border-amber-300/70 ring-1 ring-amber-100"
+                    : "border-neutral-200"
                 }`}
               >
                 <div className="flex items-start gap-4">
-                  <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${conn.color}`}
-                  >
-                    <conn.icon className="w-5 h-5" />
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-neutral-200 bg-neutral-100 text-neutral-700">
+                    <conn.icon className="h-4 w-4" />
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-white">
-                        {conn.name}
-                      </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-neutral-900">{conn.name}</span>
                       {conn.highStakes && (
-                        <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                           High-stakes
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-zinc-400 mb-2">
-                      {conn.description}
-                    </p>
-                    <div className="text-xs text-zinc-500">
-                      Scopes: {conn.scopes}
-                    </div>
+                    <p className="mb-2 text-sm text-neutral-600">{conn.description}</p>
+                    <div className="text-xs text-neutral-500">Scopes: {conn.scopes}</div>
                   </div>
-                  <div className="text-xs text-zinc-500 flex items-center gap-1">
-                    <ExternalLink className="w-3 h-3" />
+
+                  <div className="hidden items-center gap-1 text-xs text-neutral-500 sm:flex">
+                    <ExternalLink className="h-3 w-3" />
                     Managed by Auth0
                   </div>
                 </div>
@@ -139,17 +141,14 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Info */}
         <section>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-            <h3 className="text-sm font-medium text-white mb-2">
-              How Token Vault Works
-            </h3>
-            <p className="text-sm text-zinc-400">
-              DevStandup AI never stores your OAuth tokens directly. Auth0 Token
-              Vault securely manages credential exchange. When an agent needs
-              access, it requests a scoped token through the vault — and you see
-              exactly which permission is requested and why.
+          <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <div className="mb-2 flex items-center gap-2">
+              <Shield className="h-4 w-4 text-neutral-700" />
+              <h3 className="text-sm font-semibold text-neutral-900">How Token Vault Works</h3>
+            </div>
+            <p className="text-sm text-neutral-600">
+              DevStandup AI never stores your OAuth tokens directly. Auth0 Token Vault securely manages credential exchange. When an agent needs access, it requests a scoped token through the vault so you can review permissions before action execution.
             </p>
           </div>
         </section>

@@ -42,7 +42,7 @@ export default async function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={cn(
-        "antialiased dark",
+        "antialiased",
         manrope.variable,
         sora.variable,
         fontMono.variable,
@@ -53,10 +53,10 @@ export default async function RootLayout({
         <Auth0Provider user={session?.user}>
           <ConvexClientProvider>
             <ThemeProvider>
-              <main className="min-h-screen bg-zinc-950 text-white">
+              <main className="min-h-screen bg-neutral-50 text-neutral-900">
                 {children}
               </main>
-              <Toaster theme="dark" />
+              <Toaster theme="light" />
             </ThemeProvider>
           </ConvexClientProvider>
         </Auth0Provider>

@@ -34,13 +34,13 @@ const features = [
     icon: Eye,
     title: "Full Explainability",
     description:
-      "Every action shows why it's proposed, what permission it needs, and a grounded confidence score.",
+      "Every action shows why it is proposed, what permission it needs, and a grounded confidence score.",
   },
   {
     icon: Zap,
     title: "Step-Up Auth",
     description:
-      "High-stakes actions like email require re-authentication. Visual distinction keeps you aware.",
+      "High-stakes actions like email require re-authentication so sensitive operations stay controlled.",
   },
   {
     icon: Undo2,
@@ -55,189 +55,156 @@ export default async function LandingPage() {
   const isLoggedIn = !!session
   const ctaHref = isLoggedIn ? "/dashboard" : "/auth/login"
   const ctaLabel = isLoggedIn ? "Go to Dashboard" : "Sign In"
+
   return (
-    <div className="min-h-screen bg-zinc-950">
-      {/* Nav */}
-      <nav className="border-b border-zinc-800 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
+    <div className="relative min-h-screen overflow-hidden bg-neutral-100 text-neutral-900">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-24 left-0 h-72 w-72 rounded-full bg-white blur-3xl" />
+        <div className="absolute top-8 right-0 h-72 w-72 rounded-full bg-neutral-200/60 blur-3xl" />
+      </div>
+
+      <nav className="relative border-b border-neutral-200 bg-white/80 px-6 py-4 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-black text-white">
+              <Zap className="h-4 w-4" />
             </div>
-            <span className="font-display text-lg font-bold text-white">
-              DevStandup AI
-            </span>
+            <div>
+              <p className="font-display text-lg font-bold text-neutral-900">DevStandup AI</p>
+              <p className="text-xs text-neutral-500">AI actions with human approval</p>
+            </div>
           </div>
+
           <Link
             href={ctaHref}
-            className="px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-400 transition-colors"
+            className="inline-flex h-10 items-center rounded-xl bg-black px-4 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
           >
             {ctaLabel}
           </Link>
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="px-6 pt-24 pb-16">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800 text-zinc-400 text-sm mb-6">
-            <Shield className="w-3.5 h-3.5" />
+      <section className="relative px-6 pb-16 pt-24">
+        <div className="mx-auto max-w-5xl text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-3 py-1 text-sm text-neutral-600">
+            <Shield className="h-3.5 w-3.5" />
             Powered by Auth0 Token Vault
           </div>
-          <h1 className="text-5xl sm:text-6xl font-display font-bold text-white leading-tight mb-6">
-            AI acts — but only
+          <h1 className="mb-6 font-display text-5xl font-bold leading-tight text-neutral-900 sm:text-6xl">
+            AI can execute fast.
             <br />
-            <span className="text-emerald-400">with your permission</span>
+            <span className="text-neutral-500">You stay in control.</span>
           </h1>
-          <p className="text-lg text-zinc-400 max-w-2xl mx-auto mb-10">
-            DevStandup AI turns your GitHub activity into actionable standups
-            and proposes distribution across your tools. You review, approve,
-            and control every action.
+          <p className="mx-auto mb-10 max-w-2xl text-lg text-neutral-600">
+            DevStandup AI turns your GitHub activity into draft standups, then proposes actions across your tools. You review and approve every step.
           </p>
-          <div className="flex gap-4 justify-center">
-            <Link
-              href={ctaHref}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-emerald-500 text-white font-medium hover:bg-emerald-400 transition-colors"
-            >
-              {isLoggedIn ? "Go to Dashboard" : "Get Started"}
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+          <Link
+            href={ctaHref}
+            className="inline-flex items-center gap-2 rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+          >
+            {isLoggedIn ? "Open Dashboard" : "Get Started"}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
-      {/* Action Queue Preview */}
-      <section className="px-6 pb-20">
-        <div className="max-w-4xl mx-auto">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
-            <div className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-2">
-              Action Queue Preview
-            </div>
+      <section className="relative px-6 pb-20">
+        <div className="mx-auto max-w-5xl rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-3 text-xs font-mono uppercase tracking-[0.18em] text-neutral-500">
+            Action Queue Preview
+          </div>
 
-            {/* Slack action card */}
-            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center shrink-0">
-                <MessageSquare className="w-5 h-5 text-purple-400" />
+          <div className="space-y-4">
+            <div className="flex items-start gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-700">
+                <MessageSquare className="h-5 w-5" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-white">
-                    Slack Agent
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
-                    chat:write
-                  </span>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-neutral-900">Slack Agent</span>
+                  <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs text-neutral-700">chat:write</span>
                 </div>
-                <p className="text-sm text-zinc-400 mb-2">
-                  Post standup to #engineering: &quot;Fixed auth middleware,
-                  merged PR #42, working on dashboard...&quot;
+                <p className="mb-2 text-sm text-neutral-600">
+                  Post standup to #engineering with highlights from today&apos;s merged PRs and active work.
                 </p>
-                <div className="text-xs text-zinc-500">
-                  87% confident — based on 12 commits and 3 PRs
-                </div>
+                <div className="text-xs text-neutral-500">87% confident based on 12 commits and 3 PRs</div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <div className="px-3 py-1.5 rounded bg-emerald-500 text-white text-xs font-medium">
-                  Approve
-                </div>
-                <div className="px-3 py-1.5 rounded bg-zinc-700 text-zinc-300 text-xs font-medium">
-                  Skip
-                </div>
+              <div className="hidden shrink-0 gap-2 sm:flex">
+                <div className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white">Approve</div>
+                <div className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700">Skip</div>
               </div>
             </div>
 
-            {/* Gmail action card (high-stakes) */}
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0">
-                <Mail className="w-5 h-5 text-amber-400" />
+            <div className="flex items-start gap-4 rounded-2xl border border-amber-300/70 bg-amber-50/50 p-4">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-amber-200 bg-white text-amber-700">
+                <Mail className="h-5 w-5" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-white">
-                    Gmail Agent
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">
-                    gmail.send
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-amber-500/30 text-amber-300">
-                    Step-up required
-                  </span>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-neutral-900">Gmail Agent</span>
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">gmail.send</span>
+                  <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-xs text-amber-800">Step-up required</span>
                 </div>
-                <p className="text-sm text-zinc-400 mb-2">
-                  Send weekly update to team@company.com with professional
-                  summary...
+                <p className="mb-2 text-sm text-neutral-600">
+                  Send a polished weekly update email to leadership with progress summary and next milestones.
                 </p>
-                <div className="text-xs text-zinc-500">
-                  92% confident — comprehensive activity across 3 repos
-                </div>
+                <div className="text-xs text-neutral-500">92% confident with full activity context across 3 repos</div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <div className="px-3 py-1.5 rounded bg-amber-500 text-white text-xs font-medium">
-                  Approve
-                </div>
-                <div className="px-3 py-1.5 rounded bg-zinc-700 text-zinc-300 text-xs font-medium">
-                  Skip
-                </div>
+              <div className="hidden shrink-0 gap-2 sm:flex">
+                <div className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white">Approve</div>
+                <div className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700">Skip</div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="px-6 pb-24">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-display font-bold text-white text-center mb-4">
+      <section className="relative px-6 pb-24">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="mb-4 text-center font-display text-3xl font-bold text-neutral-900">
             Built for trust and transparency
           </h2>
-          <p className="text-zinc-400 text-center mb-12 max-w-2xl mx-auto">
+          <p className="mx-auto mb-12 max-w-2xl text-center text-neutral-500">
             Every AI operation is visible, explainable, and user-approved.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="rounded-xl border border-zinc-800 bg-zinc-900 p-6"
+                className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
               >
-                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4">
-                  <feature.icon className="w-5 h-5 text-emerald-400" />
+                <div className="mb-4 grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-neutral-100 text-neutral-700">
+                  <feature.icon className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-zinc-400">{feature.description}</p>
+                <h3 className="mb-2 text-lg font-semibold text-neutral-900">{feature.title}</h3>
+                <p className="text-sm text-neutral-600">{feature.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="px-6 pb-24">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-12">
-            <h2 className="text-3xl font-display font-bold text-white mb-4">
-              Your work proposes actions.
-              <br />
-              You approve them.
-            </h2>
-            <p className="text-zinc-400 mb-8">
-              From code to communication, with control.
-            </p>
-            <Link
-              href={ctaHref}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-emerald-500 text-white font-medium hover:bg-emerald-400 transition-colors"
-            >
-              {isLoggedIn ? "Go to Dashboard" : "Start Building Your Standup"}
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+      <section className="relative px-6 pb-24">
+        <div className="mx-auto max-w-4xl rounded-3xl border border-neutral-200 bg-white p-12 text-center shadow-sm">
+          <h2 className="mb-4 font-display text-3xl font-bold text-neutral-900">
+            Your work proposes actions.
+            <br />
+            You approve them.
+          </h2>
+          <p className="mb-8 text-neutral-500">From code to communication, with full control.</p>
+          <Link
+            href={ctaHref}
+            className="inline-flex items-center gap-2 rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+          >
+            {isLoggedIn ? "Go to Dashboard" : "Start Building Your Standup"}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-zinc-800 px-6 py-8">
-        <div className="max-w-6xl mx-auto flex items-center justify-between text-sm text-zinc-500">
+      <footer className="relative border-t border-neutral-200 px-6 py-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 text-sm text-neutral-500 sm:flex-row">
           <span>DevStandup AI</span>
           <span>Built with Auth0 Token Vault + Convex + Gemini</span>
         </div>

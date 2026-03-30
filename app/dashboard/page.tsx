@@ -1,7 +1,11 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
-import { type UIMessage, DefaultChatTransport, generateId, lastAssistantMessageIsCompleteWithToolCalls } from "ai"
+import {
+  DefaultChatTransport,
+  generateId,
+  lastAssistantMessageIsCompleteWithToolCalls,
+} from "ai"
 import { useChat } from "@ai-sdk/react"
 import { useInterruptions } from "@auth0/ai-vercel/react"
 import { useQuery, useMutation } from "convex/react"
@@ -34,30 +38,32 @@ const platformIcons: Record<string, typeof MessageSquare> = {
   github: GitBranch,
 }
 
-const platformColors: Record<string, string> = {
-  slack: "bg-purple-500/20 text-purple-400",
-  gmail: "bg-amber-500/20 text-amber-400",
-  github: "bg-zinc-500/20 text-zinc-400",
+const platformStyles: Record<string, string> = {
+  slack: "bg-neutral-100 text-neutral-700 border border-neutral-200",
+  gmail: "bg-neutral-100 text-neutral-700 border border-neutral-200",
+  github: "bg-neutral-100 text-neutral-700 border border-neutral-200",
+}
+
+type DashboardAction = {
+  _id: Id<"agentActions">
+  agentName: string
+  platform: string
+  actionType: string
+  content: string
+  metadata?: string
+  status: string
+  confidence?: number
+  reasoning?: string
+  scope?: string
+  isHighStakes: boolean
+  executedAt?: number
+  undoDeadline?: number
 }
 
 function ActionCard({
   action,
 }: {
-  action: {
-    _id: Id<"agentActions">
-    agentName: string
-    platform: string
-    actionType: string
-    content: string
-    metadata?: string
-    status: string
-    confidence?: number
-    reasoning?: string
-    scope?: string
-    isHighStakes: boolean
-    executedAt?: number
-    undoDeadline?: number
-  }
+  action: DashboardAction
 }) {
   const [expanded, setExpanded] = useState(false)
   const approve = useMutation(api.agentActions.approve)
@@ -66,19 +72,16 @@ function ActionCard({
   const [loading, setLoading] = useState(false)
 
   const Icon = platformIcons[action.platform] ?? Zap
-  const colorClass = platformColors[action.platform] ?? "bg-zinc-500/20 text-zinc-400"
+  const styleClass = platformStyles[action.platform] ?? "bg-neutral-100 text-neutral-700 border border-neutral-200"
   const isHighStakes = action.isHighStakes
-  const canUndo =
-    action.status === "executed" &&
-    action.undoDeadline &&
-    Date.now() < action.undoDeadline
+  const canUndo = action.status === "executed" && Boolean(action.undoDeadline)
 
   const handleApprove = async () => {
     setLoading(true)
     try {
       await approve({ id: action._id })
       toast.success(`${action.platform} action approved`)
-    } catch (e) {
+    } catch {
       toast.error("Failed to approve action")
     }
     setLoading(false)
@@ -89,7 +92,7 @@ function ActionCard({
     try {
       await skip({ id: action._id })
       toast.info("Action skipped")
-    } catch (e) {
+    } catch {
       toast.error("Failed to skip action")
     }
     setLoading(false)
@@ -100,7 +103,7 @@ function ActionCard({
     try {
       await undo({ id: action._id })
       toast.success("Action undone")
-    } catch (e) {
+    } catch {
       toast.error("Undo window expired")
     }
     setLoading(false)
@@ -108,128 +111,105 @@ function ActionCard({
 
   return (
     <div
-      className={`rounded-lg border p-4 transition-all ${
+      className={`rounded-2xl border bg-white p-4 shadow-sm transition-all ${
         isHighStakes
-          ? "border-amber-500/30 bg-amber-500/5"
-          : "border-zinc-700 bg-zinc-800/50"
+          ? "border-amber-300/70 ring-1 ring-amber-100"
+          : "border-neutral-200"
       }`}
     >
       <div className="flex items-start gap-3">
         <div
-          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}
+          className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${styleClass}`}
         >
-          <Icon className="w-4 h-4" />
+          <Icon className="h-4 w-4" />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-sm font-medium text-white capitalize">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-neutral-900 capitalize">
               {action.agentName} Agent
             </span>
             {action.scope && (
               <span
-                className={`text-xs px-2 py-0.5 rounded ${
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                   isHighStakes
-                    ? "bg-amber-500/20 text-amber-400"
-                    : "bg-emerald-500/20 text-emerald-400"
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-neutral-100 text-neutral-700"
                 }`}
               >
                 {action.scope}
               </span>
             )}
             {isHighStakes && (
-              <span className="text-xs px-2 py-0.5 rounded bg-amber-500/30 text-amber-300">
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                 Step-up required
               </span>
             )}
             {action.status !== "pending" && (
-              <span
-                className={`text-xs px-2 py-0.5 rounded ${
-                  action.status === "executed"
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : action.status === "approved"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : action.status === "skipped"
-                        ? "bg-zinc-600/20 text-zinc-400"
-                        : action.status === "failed"
-                          ? "bg-red-500/20 text-red-400"
-                          : action.status === "undone"
-                            ? "bg-zinc-500/20 text-zinc-400"
-                            : "bg-zinc-500/20 text-zinc-400"
-                }`}
-              >
+              <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
                 {action.status}
               </span>
             )}
           </div>
 
-          <p className="text-sm text-zinc-400 mb-2 line-clamp-2">
-            {action.content}
-          </p>
+          <p className="mb-2 line-clamp-2 text-sm text-neutral-600">{action.content}</p>
 
           {action.confidence != null && (
-            <div className="text-xs text-zinc-500">
+            <div className="text-xs text-neutral-500">
               {action.confidence}% confident
-              {action.reasoning && ` — ${action.reasoning}`}
+              {action.reasoning && ` - ${action.reasoning}`}
             </div>
           )}
 
-          {/* Expandable details */}
           <button
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 mt-2"
+            className="mt-2 inline-flex items-center gap-1 text-xs text-neutral-500 transition-colors hover:text-neutral-900"
           >
-            {expanded ? (
-              <ChevronUp className="w-3 h-3" />
-            ) : (
-              <ChevronDown className="w-3 h-3" />
-            )}
+            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             {expanded ? "Less" : "Details"}
           </button>
+
           {expanded && (
-            <div className="mt-2 p-3 rounded bg-zinc-900 text-xs space-y-2">
+            <div className="mt-3 space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs">
               {action.reasoning && (
                 <div>
-                  <span className="text-zinc-500">Why this action: </span>
-                  <span className="text-zinc-300">{action.reasoning}</span>
+                  <span className="text-neutral-500">Why this action: </span>
+                  <span className="text-neutral-700">{action.reasoning}</span>
                 </div>
               )}
               {action.scope && (
                 <div>
-                  <span className="text-zinc-500">Permission needed: </span>
-                  <span className="text-zinc-300">{action.scope}</span>
+                  <span className="text-neutral-500">Permission needed: </span>
+                  <span className="text-neutral-700">{action.scope}</span>
                 </div>
               )}
               {action.metadata && (
                 <div>
-                  <span className="text-zinc-500">Metadata: </span>
-                  <span className="text-zinc-300 font-mono">
-                    {action.metadata}
-                  </span>
+                  <span className="text-neutral-500">Metadata: </span>
+                  <span className="font-mono text-neutral-700">{action.metadata}</span>
                 </div>
               )}
               <div>
-                <span className="text-zinc-500">Full content: </span>
-                <span className="text-zinc-300">{action.content}</span>
+                <span className="text-neutral-500">Full content: </span>
+                <span className="text-neutral-700">{action.content}</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-2 shrink-0">
+        <div className="flex shrink-0 gap-2">
           {action.status === "pending" && (
             <>
               <Button
                 size="sm"
                 onClick={handleApprove}
                 disabled={loading}
-                className="bg-emerald-500 hover:bg-emerald-400 text-white text-xs h-8"
+                className="min-w-8"
               >
                 {loading ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Check className="w-3 h-3" />
+                  <Check className="h-3 w-3" />
                 )}
               </Button>
               <Button
@@ -237,9 +217,9 @@ function ActionCard({
                 variant="outline"
                 onClick={handleSkip}
                 disabled={loading}
-                className="border-zinc-600 text-zinc-300 text-xs h-8"
+                className="min-w-8"
               >
-                <X className="w-3 h-3" />
+                <X className="h-3 w-3" />
               </Button>
             </>
           )}
@@ -249,9 +229,8 @@ function ActionCard({
               variant="outline"
               onClick={handleUndo}
               disabled={loading}
-              className="border-zinc-600 text-zinc-300 text-xs h-8"
             >
-              <Undo2 className="w-3 h-3 mr-1" />
+              <Undo2 className="mr-1 h-3 w-3" />
               Undo
             </Button>
           )}
@@ -270,13 +249,9 @@ export default function DashboardPage() {
     todaySession ? { sessionId: todaySession._id } : "skip"
   )
 
-  const {
-    messages,
-    sendMessage,
-    status,
-    toolInterrupt,
-  } = useInterruptions((handler) =>
-    useChat({
+  const { messages, sendMessage, status, toolInterrupt } = useInterruptions((handler) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useChat({
       transport: new DefaultChatTransport({ api: "/api/chat" }),
       generateId,
       onError: handler((e: Error) => {
@@ -285,16 +260,24 @@ export default function DashboardPage() {
       }),
       sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     })
-  )
+  })
 
   const [input, setInput] = useState("")
+  const [repoInput, setRepoInput] = useState("")
   const isLoading = status === "streaming"
 
-  console.log("[Dashboard] toolInterrupt:", toolInterrupt, "status:", status)
-
   async function handleGenerateStandup() {
+    const repos = repoInput
+      .split(",")
+      .map((r) => r.trim())
+      .filter(Boolean)
+
+    const repoInstruction = repos.length
+      ? `Focus on these repos: ${repos.map((r) => `"${r}"`).join(", ")}.`
+      : "Search broadly across all my repos."
+
     await sendMessage({
-      text: "Generate my standup from my recent GitHub activity. Then propose actions to share it on Slack and via email.",
+      text: `Generate my standup from my recent GitHub activity. ${repoInstruction} Then propose actions to share it on Slack and via email.`,
     })
   }
 
@@ -305,92 +288,121 @@ export default function DashboardPage() {
     setInput("")
   }
 
-  // Combine all actions for display
-  const allActions = sessionActions ?? pendingActions ?? []
+  const allActions = (sessionActions ?? pendingActions ?? []) as DashboardAction[]
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      {/* Top bar */}
-      <header className="border-b border-zinc-800 px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+    <div className="relative min-h-screen bg-neutral-100 text-neutral-900">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 -left-20 h-72 w-72 rounded-full bg-white blur-3xl" />
+        <div className="absolute top-14 right-0 h-64 w-64 rounded-full bg-neutral-200/70 blur-3xl" />
+      </div>
+
+      <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/90 px-6 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center">
-              <Zap className="w-3.5 h-3.5 text-white" />
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-black text-white shadow-sm">
+              <Zap className="h-4 w-4" />
             </div>
-            <span className="font-display font-bold text-white">
-              DevStandup AI
-            </span>
+            <div>
+              <p className="font-display text-sm font-semibold tracking-wide text-neutral-900">
+                DevStandup AI
+              </p>
+              <p className="text-xs text-neutral-500">Control center</p>
+            </div>
           </div>
+
           <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-400">{user?.email}</span>
+            <span className="hidden text-sm text-neutral-600 sm:inline">
+              {user?.email ?? "Loading profile..."}
+            </span>
             <Link
               href="/dashboard/history"
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              className="rounded-full px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
             >
               History
             </Link>
             <Link
               href="/dashboard/settings"
-              className="text-sm text-zinc-400 hover:text-white transition-colors"
+              className="rounded-full px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
             >
               Settings
             </Link>
-            <a
+            <Link
               href="/auth/logout"
-              className="text-sm text-zinc-500 hover:text-white transition-colors"
+              className="grid h-8 w-8 place-items-center rounded-full border border-neutral-300 text-neutral-500 transition-colors hover:border-neutral-400 hover:text-neutral-900"
+              aria-label="Log out"
             >
-              <LogOut className="w-4 h-4" />
-            </a>
+              <LogOut className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </header>
 
-      {/* Main content: two-panel layout */}
-      <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-57px)]">
-        {/* Left Panel: Agent Pipeline */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <GitBranch className="w-4 h-4 text-emerald-400" />
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-6 py-8 lg:grid-cols-2">
+        <section className="flex max-h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-neutral-900">
+              <GitBranch className="h-4 w-4" />
               Agent Pipeline
             </h2>
             {todaySession && (
-              <span className="text-xs px-2 py-1 rounded bg-zinc-800 text-zinc-400">
+              <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600">
                 {todaySession.status}
               </span>
             )}
           </div>
 
-          {/* Generate button */}
           {!isLoading && messages.length === 0 && (
-            <button
-              onClick={handleGenerateStandup}
-              className="w-full rounded-xl border-2 border-dashed border-zinc-700 hover:border-emerald-500/50 bg-zinc-900 p-8 text-center transition-colors group"
-            >
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-3 group-hover:bg-emerald-500/20 transition-colors">
-                <Zap className="w-6 h-6 text-emerald-400" />
+            <div className="mb-4 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-8 transition-colors hover:border-neutral-500 hover:bg-white">
+              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-neutral-300 bg-white">
+                <Zap className="h-5 w-5 text-neutral-700" />
               </div>
-              <div className="text-white font-medium mb-1">
+              <div className="mb-1 text-center text-base font-semibold text-neutral-900">
                 Generate Today&apos;s Standup
               </div>
-              <div className="text-sm text-zinc-500">
-                Fetch your GitHub activity and create a standup with AI
+              <div className="mb-4 text-center text-sm text-neutral-500">
+                Gather GitHub activity and draft updates with reviewable actions.
               </div>
-            </button>
+
+              <div className="mb-3">
+                <label
+                  htmlFor="repo-input"
+                  className="mb-1.5 block text-xs font-medium text-neutral-600"
+                >
+                  Repos to check (optional)
+                </label>
+                <input
+                  id="repo-input"
+                  value={repoInput}
+                  onChange={(e) => setRepoInput(e.target.value)}
+                  placeholder="owner/repo, owner/another-repo"
+                  className="h-9 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-500 focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  Comma-separated. Leave empty to search all repos.
+                </p>
+              </div>
+
+              <button
+                onClick={handleGenerateStandup}
+                className="w-full rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+              >
+                Generate Standup
+              </button>
+            </div>
           )}
 
-          {/* Chat messages */}
-          <div className="flex-1 space-y-3 overflow-y-auto">
+          <div className="flex-1 space-y-3 overflow-y-auto pr-1">
             {messages.map((m) => (
               <div
                 key={m.id}
-                className={`rounded-lg p-3 text-sm ${
+                className={`rounded-2xl border p-3 text-sm ${
                   m.role === "user"
-                    ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-100"
-                    : "bg-zinc-800 border border-zinc-700 text-zinc-300"
+                    ? "border-neutral-300 bg-neutral-100 text-neutral-900"
+                    : "border-neutral-200 bg-white text-neutral-700"
                 }`}
               >
-                <div className="text-xs text-zinc-500 mb-1 capitalize">
+                <div className="mb-1 text-xs font-medium capitalize text-neutral-500">
                   {m.role === "user" ? "You" : "DevStandup AI"}
                 </div>
                 {m.parts?.map((part, i) => {
@@ -402,12 +414,9 @@ export default function DashboardPage() {
                     )
                   }
                   if (part.type?.startsWith("tool-")) {
-                    const toolPart = part as any
+                    const toolPart = part as { toolName?: string }
                     return (
-                      <div
-                        key={i}
-                        className="text-xs text-zinc-500 italic mt-1"
-                      >
+                      <div key={i} className="mt-1 text-xs italic text-neutral-500">
                         Calling {toolPart.toolName ?? "tool"}...
                       </div>
                     )
@@ -418,55 +427,48 @@ export default function DashboardPage() {
             ))}
 
             {isLoading && (
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
+              <div className="flex items-center gap-2 text-sm text-neutral-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Processing...
               </div>
             )}
 
-            {/* Token Vault interrupt handler */}
             <TokenVaultInterruptHandler interrupt={toolInterrupt} />
           </div>
 
-          {/* Chat input */}
-          <form onSubmit={handleSubmit} className="flex gap-2">
+          <form onSubmit={handleSubmit} className="mt-4 flex gap-2 border-t border-neutral-200 pt-4">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about your standup or customize actions..."
-              className="flex-1 rounded-lg bg-zinc-800 border border-zinc-700 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-500/50"
+              className="h-10 flex-1 rounded-xl border border-neutral-300 bg-white px-4 text-sm text-neutral-900 placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none"
             />
-            <Button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="bg-emerald-500 hover:bg-emerald-400 text-white"
-            >
-              <ArrowRight className="w-4 h-4" />
+            <Button type="submit" disabled={isLoading || !input.trim()}>
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
-        </div>
+        </section>
 
-        {/* Right Panel: Action Queue */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-emerald-400" />
+        <section className="flex max-h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-neutral-900">
+              <Clock className="h-4 w-4" />
               Action Queue
             </h2>
             {pendingActions && pendingActions.length > 0 && (
-              <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400">
+              <span className="rounded-full bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white">
                 {pendingActions.length} pending
               </span>
             )}
           </div>
 
           {allActions.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-neutral-50">
               <div className="text-center">
-                <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center mx-auto mb-4">
-                  <Clock className="w-8 h-8 text-zinc-600" />
+                <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl border border-neutral-300 bg-white">
+                  <Clock className="h-7 w-7 text-neutral-400" />
                 </div>
-                <div className="text-zinc-500 text-sm">
+                <div className="text-sm text-neutral-500">
                   No actions yet. Generate a standup to see
                   <br />
                   proposed actions appear here.
@@ -474,13 +476,13 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3 overflow-y-auto flex-1">
-              {allActions.map((action: any) => (
+            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+              {allActions.map((action) => (
                 <ActionCard key={action._id} action={action} />
               ))}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   )
