@@ -299,10 +299,10 @@ function NewApplicationContent() {
               Back to Dashboard
             </Link>
             <h1 className="font-display text-4xl leading-tight font-semibold text-black sm:text-5xl">
-              New Application
+              Create Application
             </h1>
             <p className="mt-2 text-sm text-black/65 sm:text-base">
-              Build, review, and send a tailored outreach in one focused flow.
+              Build, review, and send a tailored job application from one flow.
             </p>
           </div>
           <div className="rounded-full border border-black/15 bg-white/75 px-4 py-2 text-xs font-semibold tracking-[0.08em] text-black/60 uppercase">
@@ -396,7 +396,7 @@ function NewApplicationContent() {
                       Input
                     </p>
                     <h2 className="mt-2 font-display text-2xl font-semibold text-black">
-                      Paste the job and prime the draft
+                      Paste the job post and build the draft
                     </h2>
                   </div>
 
@@ -432,7 +432,7 @@ function NewApplicationContent() {
                           ) : (
                             <>
                               <Wand2 className="h-3.5 w-3.5" />
-                              Auto-detect company, role, email
+                              Auto-detect company, role, and recipient email
                             </>
                           )}
                         </button>
@@ -485,7 +485,7 @@ function NewApplicationContent() {
                           Generating your cover letter...
                         </p>
                         <p className="text-xs text-black/50">
-                          Tailoring message to the role and your profile
+                          Tailoring this application to the role and your profile
                         </p>
                       </div>
                     </div>
@@ -519,7 +519,7 @@ function NewApplicationContent() {
                         Draft
                       </p>
                       <h2 className="mt-1 font-display text-2xl font-semibold text-black">
-                        Review before sending
+                        Review application before sending
                       </h2>
                       <p className="mt-1 text-sm text-black/55">
                         {company || "Company"} - {role || "Role"}
@@ -591,7 +591,7 @@ function NewApplicationContent() {
                     ) : (
                       <>
                         <Send className="h-4 w-4" />
-                        Send Application
+                        Send via Gmail
                       </>
                     )}
                   </button>
@@ -607,7 +607,7 @@ function NewApplicationContent() {
                     <CheckCircle2 className="h-10 w-10 text-emerald-600" />
                   </div>
                   <h2 className="mb-2 font-display text-3xl font-semibold text-black">
-                    Application Sent
+                    Application sent
                   </h2>
                   <p className="mx-auto mb-2 max-w-lg text-black/70">
                     Your cover letter for <strong>{role}</strong> at{" "}
@@ -631,7 +631,7 @@ function NewApplicationContent() {
                       }}
                       className="rounded-2xl border border-black/15 bg-white px-6 py-3 text-sm font-semibold text-black/70 transition-colors hover:bg-[#f6f6f2]"
                     >
-                      Apply to Another
+                      Create another application
                     </Link>
                     <Link
                       href={

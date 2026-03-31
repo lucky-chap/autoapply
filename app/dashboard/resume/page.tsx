@@ -25,7 +25,7 @@ export default async function ResumePage() {
           Resume Profile
         </h1>
         <p className="mt-2 text-gray-500">
-          Your resume is the blueprint for every cover letter we generate.
+          Your resume powers every generated application and cover letter.
         </p>
       </div>
 
@@ -35,21 +35,21 @@ export default async function ResumePage() {
         <div className="rounded-2xl bg-blue-50 p-6">
           <h3 className="mb-2 flex items-center gap-2 font-bold text-blue-900">
             <CheckCircle2 className="h-5 w-5 text-blue-600" />
-            AI Parsing
+            Resume Parsing
           </h3>
           <p className="text-sm leading-relaxed text-blue-800/80">
-            We use GLM-5 to extract structured data from your resume. No manual
-            entry required.
+            We extract structured skills and experience from your resume so
+            drafts start with accurate context.
           </p>
         </div>
         <div className="rounded-2xl bg-green-50 p-6">
           <h3 className="mb-2 flex items-center gap-2 font-bold text-green-900">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
-            Tone Matching
+            Role-Aware Personalization
           </h3>
           <p className="text-sm leading-relaxed text-green-800/80">
-            The agent learns your writing style to ensure the AI-drafted letters
-            sound exactly like you.
+            Generated letters adapt your experience to each role while keeping
+            the tone consistent with your profile.
           </p>
         </div>
       </div>

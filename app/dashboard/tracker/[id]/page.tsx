@@ -53,9 +53,9 @@ function getEngagementLabel(opens: number) {
 
 const nextActionCopy: Record<string, string> = {
   Applied:
-    "If this stays quiet for 5-7 days, send one short follow-up with a clear CTA.",
+    "If this stays quiet for 5-7 days, send a concise follow-up with one clear next step.",
   Replied:
-    "Reply quickly while intent is high and include 2-3 scheduling windows if they asked to connect.",
+    "Reply quickly while intent is high, and include 2-3 time windows if they asked to connect.",
   Interview:
     "Prepare role-specific stories and send a same-day thank-you note after the interview.",
   Offer:
@@ -118,7 +118,9 @@ export default function TrackerPage() {
   if (application === null) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 text-center">
-        <p className="text-gray-500">Application not found.</p>
+        <p className="text-gray-500">
+          This application record was not found.
+        </p>
         <Link
           href="/dashboard"
           className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary"
@@ -201,7 +203,7 @@ export default function TrackerPage() {
                 <Sparkles className="h-4 w-4" />
               </div>
               <h2 className="text-sm font-semibold tracking-[0.08em] text-black/65 uppercase">
-                Next move
+                Recommended next step
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-black/70">
                 {nextActionCopy[application.status] ??
@@ -215,14 +217,14 @@ export default function TrackerPage() {
           <article className="rounded-3xl border border-black/10 bg-white">
             <div className="border-b border-black/10 px-6 py-4">
               <h2 className="text-sm font-bold tracking-[0.08em] text-black/70 uppercase">
-                Open History
+                Email Open History
               </h2>
             </div>
             {opens.length === 0 ? (
               <div className="p-8 text-center">
                 <p className="text-sm text-black/50 italic">
                   No opens recorded yet. This timeline updates automatically
-                  when the recipient opens your email.
+                  when the recipient opens your application email.
                 </p>
               </div>
             ) : (
@@ -263,7 +265,7 @@ export default function TrackerPage() {
 
           <article className="rounded-3xl border border-black/10 bg-white p-6">
             <h2 className="text-sm font-bold tracking-[0.08em] text-black/70 uppercase">
-              Timeline Summary
+              Activity Summary
             </h2>
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-black/10 bg-[#f8f8f8] px-4 py-3">

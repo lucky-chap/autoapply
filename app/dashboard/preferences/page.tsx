@@ -186,10 +186,10 @@ export default function PreferencesPage() {
       <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-bold text-primary">
-            Job Preferences
+            Application Preferences
           </h1>
           <p className="mt-2 text-gray-500">
-            Tell the agent what you&apos;re looking for to get the best matches.
+            Tell AutoApply what to target so it only drafts for relevant roles.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -232,8 +232,8 @@ export default function PreferencesPage() {
                 <h2 className="text-xl font-bold text-primary">Auto Mode</h2>
                 <p className="text-sm text-gray-500">
                   {isAutoMode
-                    ? "Applications are sent automatically without approval"
-                    : "Send applications without manual approval"}
+                    ? "Applications send automatically without manual approval"
+                    : "Keep manual approval before each send"}
                 </p>
               </div>
             </div>
@@ -387,7 +387,7 @@ export default function PreferencesPage() {
                   Default Availability
                 </h2>
                 <p className="text-sm text-gray-500">
-                  Set your available hours for interview scheduling.
+                  Set your available hours for interview coordination.
                 </p>
               </div>
             </div>
@@ -485,7 +485,7 @@ export default function PreferencesPage() {
           </div>
         </section>
 
-        {/* OpenClaw Notifications */}
+        {/* Push Notifications */}
         <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -493,9 +493,9 @@ export default function PreferencesPage() {
                 <Bell className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-primary">OpenClaw Notifications</h2>
+                <h2 className="text-xl font-bold text-primary">Push Notifications</h2>
                 <p className="text-sm text-gray-500">
-                  Receive push notifications via your OpenClaw instance.
+                  Receive push updates when application activity changes.
                 </p>
               </div>
             </div>
@@ -556,8 +556,8 @@ export default function PreferencesPage() {
       <div className="mt-8 flex gap-4 rounded-2xl border border-amber-100 bg-amber-50 p-6">
         <Settings2 className="h-6 w-6 shrink-0 text-amber-600" />
         <p className="text-sm leading-relaxed text-amber-900">
-          Your preferences help our AI agent filter out irrelevant job posts and
-          focus on high-quality matches that fit your career goals.
+          These preferences guide AutoApply to prioritize strong-fit openings and
+          avoid generating low-relevance applications.
         </p>
       </div>
     </div>
