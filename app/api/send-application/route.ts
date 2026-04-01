@@ -95,8 +95,21 @@ export async function POST(req: Request) {
     ? { name: session.user.name as string, email: session.user.email as string }
     : undefined
 
-  // Send via Gmail API with tracking pixel
-  const encodedEmail = encodeEmail({ to, subject, body, from, trackingPixelUrl })
+  // Fetch profile links for the email footer
+  const resume = await convex.query(api.resumeProfiles.getByUser, { userId })
+  const profileLinks = resume ? {
+    githubUrl: resume.githubUrl,
+    linkedinUrl: resume.linkedinUrl,
+    portfolioUrl: resume.portfolioUrl,
+  } : undefined
+
+  // Send via Gmail API with tracking pixel and click-tracked links
+  const encodedEmail = encodeEmail({
+    to, subject, body, from, trackingPixelUrl,
+    applicationId: applicationId as string,
+    trackBaseUrl: siteUrl,
+    profileLinks,
+  })
   let gmailResult: { id: string; threadId: string }
   try {
     gmailResult = await sendGmailMessage(accessToken, encodedEmail)

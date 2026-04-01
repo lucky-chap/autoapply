@@ -45,6 +45,38 @@ http.route({
   }),
 })
 
+// Link click tracker — records click then 302 redirects to real URL
+http.route({
+  path: "/track/click",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const params = new URL(req.url).searchParams
+    const applicationId = params.get("id")
+    const targetUrl = params.get("url")
+
+    if (applicationId && targetUrl) {
+      try {
+        await ctx.runMutation(internal.applications.recordClick, {
+          applicationId: applicationId as Id<"applications">,
+          url: targetUrl,
+          userAgent: req.headers.get("user-agent") ?? undefined,
+        })
+      } catch {
+        // Don't break the redirect
+      }
+    }
+
+    // Always redirect — even if recording fails
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: targetUrl || "/",
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      },
+    })
+  }),
+})
+
 // Store refresh token — called from Next.js API routes with a shared secret
 http.route({
   path: "/api/store-refresh-token",

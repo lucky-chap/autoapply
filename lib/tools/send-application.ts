@@ -39,12 +39,23 @@ export const sendApplicationTool = withGmailSend(
         ? { name: user.name as string, email: user.email as string }
         : undefined;
 
+      // Fetch profile links for the email footer
+      const resume = await convex.query(api.resumeProfiles.getByUser, { userId: user.sub });
+      const profileLinks = resume ? {
+        githubUrl: resume.githubUrl,
+        linkedinUrl: resume.linkedinUrl,
+        portfolioUrl: resume.portfolioUrl,
+      } : undefined;
+
       const encoded = encodeEmail({
         to: recipientEmail,
         subject: emailSubject,
         body: coverLetter,
         from,
         trackingPixelUrl,
+        applicationId: applicationId as string,
+        trackBaseUrl: siteUrl,
+        profileLinks,
       });
 
       let gmailResult: { id: string; threadId: string };

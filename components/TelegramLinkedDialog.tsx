@@ -29,7 +29,7 @@ function TelegramLinkedDialogInner() {
       <div className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-2xl">
         <button
           onClick={handleClose}
-          className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          className="absolute top-4 right-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
         >
           <X className="h-5 w-5" />
         </button>
@@ -48,7 +48,7 @@ function TelegramLinkedDialogInner() {
 
         <div className="flex flex-col gap-3">
           <a
-            href="https://t.me"
+            href="https://t.me/aiapplybot"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2AABEE] px-5 py-2.5 font-semibold text-white shadow-lg shadow-[#2AABEE]/20 transition-all hover:-translate-y-0.5 hover:shadow-xl active:scale-95"

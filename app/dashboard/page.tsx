@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  LogOut,
 } from "lucide-react"
 import {
   ApplicationsTable,
@@ -24,6 +25,7 @@ import { TelegramLinkCard } from "@/components/TelegramLinkCard"
 import { TelegramLinkedDialog } from "@/components/TelegramLinkedDialog"
 import { OnboardingGuard } from "@/components/OnboardingGuard"
 import { DiscoveredJobs } from "@/components/DiscoveredJobs"
+import { TokenSync } from "@/components/TokenSync"
 
 const quickActions = [
   {
@@ -89,6 +91,7 @@ export default async function DashboardPage() {
 
   return (
     <OnboardingGuard userId={user.sub!}>
+      <TokenSync />
       <div className="min-h-screen bg-[#f5f3f2]">
         <TelegramLinkedDialog />
 
@@ -257,6 +260,16 @@ export default async function DashboardPage() {
                     {link.label}
                   </Link>
                 ))}
+                
+                <div className="mx-2 my-2 border-t border-black/5" />
+                
+                <a
+                  href="/auth/logout"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </a>
               </nav>
 
               <article className="rounded-3xl border border-black/15 bg-white p-4">

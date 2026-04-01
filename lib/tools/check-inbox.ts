@@ -49,10 +49,24 @@ export const checkInboxTool = withGmailRead(
         const list = await listGmailMessages(accessToken, query, 5);
         if (!list.messages || list.messages.length === 0) continue;
 
-        const latestMsg = await getGmailMessage(accessToken, list.messages[0].id);
-        if (latestMsg.id === app.lastCheckedGmailMsgId) continue;
+        // Find the latest message that is NOT from the user
+        let latestRecruiterMsg = null;
+        const userEmail = user.email?.toLowerCase() || "";
+        
+        for (const m of list.messages) {
+          const msg = await getGmailMessage(accessToken, m.id);
+          const fromHeader = msg.payload?.headers?.find((h: any) => h.name.toLowerCase() === "from");
+          const fromValue = fromHeader?.value?.toLowerCase() || "";
+          
+          if (userEmail && !fromValue.includes(userEmail)) {
+            latestRecruiterMsg = msg;
+            break; // Found the newest reply from not-me
+          }
+        }
 
-        const body = extractBody(latestMsg.payload);
+        if (!latestRecruiterMsg || latestRecruiterMsg.id === app.lastCheckedGmailMsgId) continue;
+
+        const body = extractBody(latestRecruiterMsg.payload);
         if (!body) continue;
 
         const classifyPrompt = `

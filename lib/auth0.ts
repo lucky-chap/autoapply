@@ -12,12 +12,16 @@ export const auth0 = new Auth0Client({
   appBaseUrl: process.env.APP_BASE_URL!,
   enableConnectAccountEndpoint: true,
   httpTimeout: 10000,
+  authorizationParameters: {
+    scope: "openid profile email offline_access",
+  },
 })
 
 // Get the refresh token from Auth0 session
 export const getRefreshToken = async () => {
   const session = await auth0.getSession()
-  return session?.tokenSet?.refreshToken
+  const tokenSet = session?.tokenSet as any
+  return tokenSet?.refresh_token || tokenSet?.refreshToken
 }
 
 export const getUser = async () => {

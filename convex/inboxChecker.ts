@@ -65,7 +65,7 @@ export const checkAllInboxes = internalAction({
               text:
                 `🔑 <b>Re-authorization required</b>\n\n` +
                 `Your Google session has expired so I can't check for replies.\n` +
-                `Please visit ${siteUrl} and send an application to refresh your session.`,
+                `Please visit ${siteUrl}/dashboard to refresh your session automatically.`,
             })
           }
         }

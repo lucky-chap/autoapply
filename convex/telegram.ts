@@ -444,9 +444,9 @@ export const executeApprovedAction = internalAction({
             botToken,
             action.telegramChatId,
             `🔑 <b>Re-authorization required</b>\n\n` +
-              `Your Google session has expired. Please visit the web app to re-authorize:\n` +
-              `${escapeHtml(siteUrl)}\n\n` +
-              `After logging in, send a new application from the web to refresh your session, then retry here.`,
+              `Your Google session has expired. Please visit the dashboard to refresh your session:\n` +
+              `${escapeHtml(siteUrl)}/dashboard\n\n` +
+              `After logging in, your token will sync automatically. Then retry here.`,
             {
               inline_keyboard: [
                 [{ text: "🔄 Retry", callback_data: `retry:${pendingActionId}` }],

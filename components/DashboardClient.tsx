@@ -15,6 +15,7 @@ import {
   MessageSquareReply,
   Send,
   TrendingUp,
+  MousePointerClick,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -45,6 +46,7 @@ type DashboardApplication = {
   createdAt: number
   emailSentAt?: number
   openCount?: number
+  clickCount?: number
 }
 
 type DashboardMetrics = {
@@ -60,6 +62,7 @@ type DashboardMetrics = {
   replyProgress: number
   bestSendDay: string
   totalOpens: number
+  totalClicks: number
 }
 
 function getWeekStartEpoch() {
@@ -131,6 +134,10 @@ function getDashboardMetrics(
     (sum, app) => sum + (app.openCount ?? 0),
     0
   )
+  const totalClicks = applications.reduce(
+    (sum, app) => sum + (app.clickCount ?? 0),
+    0
+  )
 
   const weekStartEpoch = getWeekStartEpoch()
   const weekSent = applications.filter(
@@ -164,6 +171,7 @@ function getDashboardMetrics(
     replyProgress,
     bestSendDay,
     totalOpens,
+    totalClicks,
   }
 }
 
@@ -277,7 +285,7 @@ export function DashboardStatCards({ userId }: { userId: string }) {
       icon: MessageSquareReply,
       label: "Replies Received",
       value: String(metrics.replyCount),
-      helper: `${metrics.totalOpens} tracked opens`,
+      helper: `${metrics.totalClicks} link clicks · ${metrics.totalOpens} opens`,
     },
     {
       icon: CalendarCheck,
@@ -388,7 +396,7 @@ export function ApplicationsTable({ userId }: { userId: string }) {
             Status
           </TableHead>
           <TableHead className="text-center text-[11px] tracking-[0.1em] text-black/45 uppercase">
-            Opens
+            Engagement
           </TableHead>
           <TableHead className="hidden text-[11px] tracking-[0.1em] text-black/45 uppercase sm:table-cell">
             Sent
@@ -429,14 +437,23 @@ export function ApplicationsTable({ userId }: { userId: string }) {
               </Badge>
             </TableCell>
             <TableCell className="text-center">
-              {(app.openCount ?? 0) > 0 ? (
-                <span className="inline-flex items-center gap-1 text-blue-600">
-                  <Eye className="h-3.5 w-3.5" />
-                  <span className="text-sm font-semibold">{app.openCount}</span>
-                </span>
-              ) : (
-                <span className="text-gray-300">&mdash;</span>
-              )}
+              <div className="inline-flex items-center gap-2">
+                {(app.clickCount ?? 0) > 0 ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-600" title="Link clicks">
+                    <MousePointerClick className="h-3.5 w-3.5" />
+                    <span className="text-sm font-semibold">{app.clickCount}</span>
+                  </span>
+                ) : null}
+                {(app.openCount ?? 0) > 0 ? (
+                  <span className="inline-flex items-center gap-1 text-blue-600" title="Email opens">
+                    <Eye className="h-3.5 w-3.5" />
+                    <span className="text-sm font-semibold">{app.openCount}</span>
+                  </span>
+                ) : null}
+                {(app.clickCount ?? 0) === 0 && (app.openCount ?? 0) === 0 ? (
+                  <span className="text-gray-300">&mdash;</span>
+                ) : null}
+              </div>
             </TableCell>
             <TableCell className="hidden sm:table-cell">
               <span className="flex items-center gap-1.5 text-gray-400">

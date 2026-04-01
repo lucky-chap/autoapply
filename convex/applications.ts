@@ -73,9 +73,13 @@ export const updateStatus = mutation({
       v.literal("Offer"),
       v.literal("Rejected")
     ),
+    lastCheckedGmailMsgId: v.optional(v.string()),
   },
-  handler: async (ctx, { id, status }) => {
-    await ctx.db.patch(id, { status })
+  handler: async (ctx, { id, status, lastCheckedGmailMsgId }) => {
+    await ctx.db.patch(id, {
+      status,
+      ...(lastCheckedGmailMsgId ? { lastCheckedGmailMsgId } : {}),
+    })
   },
 })
 
@@ -118,6 +122,39 @@ export const recordOpen = internalMutation({
         openCount: (app.openCount ?? 0) + 1,
       })
     }
+  },
+})
+
+export const recordClick = internalMutation({
+  args: {
+    applicationId: v.id("applications"),
+    url: v.string(),
+    userAgent: v.optional(v.string()),
+  },
+  handler: async (ctx, { applicationId, url, userAgent }) => {
+    await ctx.db.insert("linkClicks", {
+      applicationId,
+      url,
+      clickedAt: Date.now(),
+      userAgent,
+    })
+    const app = await ctx.db.get(applicationId)
+    if (app) {
+      await ctx.db.patch(applicationId, {
+        clickCount: (app.clickCount ?? 0) + 1,
+      })
+    }
+  },
+})
+
+export const getClicks = query({
+  args: { applicationId: v.id("applications") },
+  handler: async (ctx, { applicationId }) => {
+    return await ctx.db
+      .query("linkClicks")
+      .withIndex("by_applicationId", (q) => q.eq("applicationId", applicationId))
+      .order("desc")
+      .take(50)
   },
 })
 

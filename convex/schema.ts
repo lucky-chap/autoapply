@@ -20,6 +20,7 @@ export default defineSchema({
     followUpSentAt: v.optional(v.number()),
     emailSentAt: v.optional(v.number()),
     openCount: v.optional(v.number()),
+    clickCount: v.optional(v.number()),
     schedulingLink: v.optional(v.string()),
     proposedTimes: v.optional(v.array(v.string())),
     source: v.optional(v.union(v.literal("web"), v.literal("telegram"))),
@@ -29,6 +30,13 @@ export default defineSchema({
   emailOpens: defineTable({
     applicationId: v.id("applications"),
     openedAt: v.number(),
+    userAgent: v.optional(v.string()),
+  }).index("by_applicationId", ["applicationId"]),
+
+  linkClicks: defineTable({
+    applicationId: v.id("applications"),
+    url: v.string(),
+    clickedAt: v.number(),
     userAgent: v.optional(v.string()),
   }).index("by_applicationId", ["applicationId"]),
 

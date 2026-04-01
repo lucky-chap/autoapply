@@ -2,7 +2,7 @@ import { auth0 } from "@/lib/auth0"
 import { ConvexHttpClient } from "convex/browser"
 import { api } from "@/convex/_generated/api"
 import { listGmailMessages, getGmailMessage } from "@/lib/gmail"
-import { callGLM } from "@/lib/glm"
+import { callVertex } from "@/lib/vertex"
 import { NextResponse } from "next/server"
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
@@ -13,11 +13,11 @@ function extractBody(payload: { parts?: { mimeType: string; body?: { data?: stri
       (p: { mimeType: string }) => p.mimeType === "text/plain"
     )
     if (textPart?.body?.data) {
-      return Buffer.from(textPart.body.data, "base64url").toString("utf-8")
+      return Buffer.from(textPart.body.data, "base64").toString("utf-8")
     }
   }
   if (payload.body?.data) {
-    return Buffer.from(payload.body.data, "base64url").toString("utf-8")
+    return Buffer.from(payload.body.data, "base64").toString("utf-8")
   }
   return ""
 }
@@ -78,7 +78,13 @@ export async function POST(req: Request) {
             const fromHeader = msg.payload?.headers?.find(
               (h: { name: string }) => h.name.toLowerCase() === "from"
             )
-            return fromHeader && fromHeader.value.includes(app.recipientEmail)
+            if (!fromHeader) return false
+            const fromValue = fromHeader.value.toLowerCase()
+            const userEmail = session.user.email?.toLowerCase() || ""
+            
+            // It's a reply if it's NOT from the user's own email.
+            // This handles cases where recruiters reply from different aliases.
+            return userEmail && !fromValue.includes(userEmail)
           }
         )
         if (replies.length > 0) {
@@ -101,35 +107,40 @@ export async function POST(req: Request) {
     if (!bodyText) continue
 
     // Classify the reply using GLM-4-Flash (fast + cheap)
-    const classifyPrompt = `You are classifying a recruiter's email reply to a job application.
+    const classifyPrompt = `
+      Classify this email reply for a job application for "${app.role}" at "${app.company}":
+      
+      "${bodyText}"
 
-The candidate applied for the role of "${app.role}" at "${app.company}".
+      Return a JSON object:
+      {
+        "status": "Replied" | "Interview" | "Offer" | "Rejected",
+        "summary": "Short 1-sentence summary",
+        "schedulingLink": "URL if found, else null"
+      }
+    `;
 
-EMAIL REPLY:
-${bodyText.slice(0, 2000)}
+    const classificationRaw = await callVertex(classifyPrompt);
+    let matchedStatus: "Replied" | "Interview" | "Offer" | "Rejected" | null = null;
+    try {
+      const jsonMatch = classificationRaw.match(/\{[\s\S]*\}/);
+      const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+      
+      const validStatuses = ["Replied", "Interview", "Offer", "Rejected"] as const;
+      matchedStatus = validStatuses.find(
+        (s) => String(parsed.status || "").toLowerCase() === s.toLowerCase()
+      ) || null;
 
-Classify this email into EXACTLY ONE of these categories:
-- "Replied" — general acknowledgement or interest
-- "Interview" — scheduling an interview or requesting availability
-- "Offer" — extending a job offer
-- "Rejected" — rejection or position filled
-
-Return ONLY the category word, nothing else.`
-
-    const classification = await callGLM(classifyPrompt)
-    const status = classification.trim().replace(/['"]/g, "")
-
-    const validStatuses = ["Replied", "Interview", "Offer", "Rejected"] as const
-    const matchedStatus = validStatuses.find(
-      (s) => status.toLowerCase() === s.toLowerCase()
-    )
-
-    if (matchedStatus && matchedStatus !== app.status) {
-      await convex.mutation(api.applications.updateStatus, {
-        id: app._id,
-        status: matchedStatus,
-      })
-      updatedCount++
+      if (matchedStatus && matchedStatus !== app.status) {
+        await convex.mutation(api.applications.updateStatus, {
+          id: app._id,
+          status: matchedStatus,
+          lastCheckedGmailMsgId: replyMessage.id,
+        });
+        updatedCount++;
+      }
+    } catch (e) {
+      console.error("Classification failed for", app.company, e);
     }
   }
 
