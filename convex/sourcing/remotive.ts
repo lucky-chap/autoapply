@@ -66,6 +66,10 @@ export const fetchAndStore = internalAction({
       const description = stripHtml(job.description).slice(0, 8000)
       const email = extractEmail(description)
 
+      // Simple Domain Inference (can be improved with AI)
+      const domain = job.company_name.toLowerCase().replace(/[^a-z0-9]/g, "") + ".com";
+      const department = job.category || "Engineering";
+
       const added: boolean = await ctx.runMutation(
         internal.sourcing.store.insertIfNew,
         {
@@ -83,6 +87,8 @@ export const fetchAndStore = internalAction({
             : undefined,
           email: email ?? undefined,
           hasEmail: !!email,
+          domain,
+          department,
         }
       )
       if (added) inserted++

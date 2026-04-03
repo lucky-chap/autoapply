@@ -344,6 +344,85 @@ export const deletePendingSalaryReview = internalMutation({
   },
 })
 
+// ── Deep link token-based linking (one-click from web to Telegram) ──
+
+export const createLinkingToken = mutation({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    // Delete existing tokens for this user
+    const existing = await ctx.db
+      .query("linkingTokens")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .take(10)
+    for (const doc of existing) {
+      await ctx.db.delete(doc._id)
+    }
+
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+      .map((b) => b.toString(36).padStart(2, "0"))
+      .join("")
+      .slice(0, 16)
+
+    await ctx.db.insert("linkingTokens", {
+      userId,
+      token,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    })
+    return token
+  },
+})
+
+export const consumeLinkingToken = internalMutation({
+  args: {
+    token: v.string(),
+    telegramChatId: v.string(),
+  },
+  handler: async (ctx, { token, telegramChatId }) => {
+    const record = await ctx.db
+      .query("linkingTokens")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first()
+
+    if (!record || record.expiresAt < Date.now()) {
+      if (record) await ctx.db.delete(record._id)
+      return { success: false as const, error: "Invalid or expired token" }
+    }
+
+    const userId = record.userId
+
+    // Remove any existing link for this user or this chat
+    const existingByUser = await ctx.db
+      .query("telegramLinks")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first()
+    if (existingByUser) {
+      await ctx.db.delete(existingByUser._id)
+    }
+
+    const existingByChat = await ctx.db
+      .query("telegramLinks")
+      .withIndex("by_telegramChatId", (q) =>
+        q.eq("telegramChatId", telegramChatId)
+      )
+      .first()
+    if (existingByChat) {
+      await ctx.db.delete(existingByChat._id)
+    }
+
+    // Create the link
+    await ctx.db.insert("telegramLinks", {
+      userId,
+      telegramChatId,
+      linkedAt: Date.now(),
+    })
+
+    // Delete the used token
+    await ctx.db.delete(record._id)
+
+    return { success: true as const, userId }
+  },
+})
+
 export const cleanup = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -353,6 +432,15 @@ export const cleanup = internalMutation({
       .filter((q) => q.lt(q.field("expiresAt"), now))
       .take(100)
     for (const doc of expired) {
+      await ctx.db.delete(doc._id)
+    }
+
+    // Clean up expired linking tokens
+    const expiredTokens = await ctx.db
+      .query("linkingTokens")
+      .filter((q) => q.lt(q.field("expiresAt"), now))
+      .take(100)
+    for (const doc of expiredTokens) {
       await ctx.db.delete(doc._id)
     }
 

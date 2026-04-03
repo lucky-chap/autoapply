@@ -12,10 +12,13 @@ export const getJobById = internalQuery({
   },
 })
 
-/**
- * Get a single user job match by its ID.
- * Used by the Telegram callback handler.
- */
+export const getProspectById = internalQuery({
+  args: { prospectId: v.id("prospects") },
+  handler: async (ctx, { prospectId }) => {
+    return await ctx.db.get(prospectId)
+  },
+})
+
 export const getMatchById = internalQuery({
   args: { matchId: v.id("userJobMatches") },
   handler: async (ctx, { matchId }) => {

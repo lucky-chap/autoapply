@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { UploadResume } from "./UploadResume"
 import {
   ArrowRight,
@@ -37,7 +37,11 @@ export function OnboardingWizard({
   isGoogleConnected: boolean
 }) {
   const router = useRouter()
-  const [step, setStep] = useState<StepId>("welcome")
+  const searchParams = useSearchParams()
+  const paramStep = searchParams.get("step") as StepId | null
+  const [step, setStep] = useState<StepId>(
+    paramStep && STEPS.some((s) => s.id === paramStep) ? paramStep : "welcome"
+  )
   const resumeProfile = useQuery(api.resumeProfiles.getByUser, { userId })
   const preferences = useQuery(api.preferences.getByUser, { userId })
   const completeOnboarding = useMutation(api.userSettings.completeOnboarding)
@@ -47,14 +51,18 @@ export function OnboardingWizard({
   const goNext = () => {
     const nextIndex = currentIndex + 1
     if (nextIndex < STEPS.length) {
-      setStep(STEPS[nextIndex].id)
+      const nextStep = STEPS[nextIndex].id
+      setStep(nextStep)
+      window.history.replaceState(null, "", `?step=${nextStep}`)
     }
   }
 
   const goBack = () => {
     const prevIndex = currentIndex - 1
     if (prevIndex >= 0) {
-      setStep(STEPS[prevIndex].id)
+      const prevStep = STEPS[prevIndex].id
+      setStep(prevStep)
+      window.history.replaceState(null, "", `?step=${prevStep}`)
     }
   }
 
@@ -506,7 +514,7 @@ function GoogleStep({
   const scopeParams = scopes
     .map((s) => `scopes=${encodeURIComponent(s)}`)
     .join("&")
-  const connectUrl = `/auth/connect?connection=google-oauth2&prompt=consent&${scopeParams}&returnTo=${encodeURIComponent("/onboarding")}`
+  const connectUrl = `/auth/connect?connection=google-oauth2&prompt=consent&${scopeParams}&returnTo=${encodeURIComponent("/onboarding?step=google")}`
 
   return (
     <div>

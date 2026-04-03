@@ -24,8 +24,11 @@ export default defineSchema({
     schedulingLink: v.optional(v.string()),
     proposedTimes: v.optional(v.array(v.string())),
     source: v.optional(v.union(v.literal("web"), v.literal("telegram"))),
+    jobListingId: v.optional(v.id("jobListings")),
     createdAt: v.number(),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_userId_and_jobListingId", ["userId", "jobListingId"]),
 
   emailOpens: defineTable({
     applicationId: v.id("applications"),
@@ -81,6 +84,14 @@ export default defineSchema({
     expiresAt: v.number(),
   }).index("by_code", ["code"]),
 
+  linkingTokens: defineTable({
+    userId: v.string(),
+    token: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_userId", ["userId"]),
+
   userTokens: defineTable({
     userId: v.string(),
     auth0RefreshToken: v.string(),
@@ -113,6 +124,7 @@ export default defineSchema({
     resolvedAt: v.optional(v.number()),
     error: v.optional(v.string()),
     applicationId: v.optional(v.id("applications")),
+    jobListingId: v.optional(v.id("jobListings")),
     attachResume: v.optional(v.boolean()),
     createdAt: v.number(),
   }).index("by_userId_and_status", ["userId", "status"]),
@@ -210,10 +222,54 @@ export default defineSchema({
     fetchedAt: v.number(),
     email: v.optional(v.string()),
     hasEmail: v.optional(v.boolean()),
+    domain: v.optional(v.string()),
+    department: v.optional(v.string()),
   })
     .index("by_source_and_externalId", ["source", "externalId"])
     .index("by_fetchedAt", ["fetchedAt"])
     .index("by_hasEmail_and_fetchedAt", ["hasEmail", "fetchedAt"]),
+
+  prospects: defineTable({
+    userId: v.string(),
+    jobListingId: v.id("jobListings"),
+    name: v.string(),
+    email: v.string(),
+    title: v.string(),
+    company: v.string(),
+    seniority: v.optional(v.string()),
+    department: v.optional(v.string()),
+    source: v.union(v.literal("apollo"), v.literal("pdl"), v.literal("manual"), v.literal("job_post")),
+    status: v.union(
+      v.literal("new"),
+      v.literal("verified"),
+      v.literal("invalid"),
+      v.literal("contacted")
+    ),
+    enrichmentData: v.optional(v.any()), // Raw data from enrichment APIs
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_jobListingId", ["jobListingId"])
+    .index("by_userId_and_status", ["userId", "status"]),
+
+  outreachLogs: defineTable({
+    userId: v.string(),
+    prospectId: v.id("prospects"),
+    jobListingId: v.id("jobListings"),
+    actionType: v.literal("email_sent"),
+    status: v.union(v.literal("sent"), v.literal("bounced"), v.literal("replied")),
+    sentAt: v.number(),
+    payload: v.object({
+      subject: v.string(),
+      body: v.string(),
+    }),
+    gmailThreadId: v.optional(v.string()),
+    replyAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_prospectId", ["prospectId"])
+    .index("by_jobListingId", ["jobListingId"]),
 
   userJobMatches: defineTable({
     userId: v.string(),

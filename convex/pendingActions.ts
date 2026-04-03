@@ -23,6 +23,7 @@ export const create = internalMutation({
     telegramChatId: v.optional(v.string()),
     source: v.union(v.literal("telegram"), v.literal("web")),
     applicationId: v.optional(v.id("applications")),
+    jobListingId: v.optional(v.id("jobListings")),
     attachResume: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {

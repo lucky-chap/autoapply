@@ -19,6 +19,8 @@ export const insertIfNew = internalMutation({
     postedAt: v.optional(v.number()),
     email: v.optional(v.string()),
     hasEmail: v.optional(v.boolean()),
+    domain: v.optional(v.string()),
+    department: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -91,7 +93,7 @@ export const createMatch = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    await ctx.db.insert("userJobMatches", {
+    return await ctx.db.insert("userJobMatches", {
       userId: args.userId,
       jobListingId: args.jobListingId,
       status: args.status ?? "new",

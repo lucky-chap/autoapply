@@ -18,8 +18,34 @@ export async function handleStart(
   ctx: ActionCtx,
   botToken: string,
   chatId: string,
-  siteUrl: string
+  siteUrl: string,
+  deepLinkToken?: string
 ) {
+  // Handle deep link token-based account linking
+  if (deepLinkToken) {
+    const result = await ctx.runMutation(
+      internal.telegramLinks.consumeLinkingToken,
+      { token: deepLinkToken, telegramChatId: chatId }
+    )
+    if (result.success) {
+      await sendMessage(
+        botToken,
+        chatId,
+        "✅ <b>Account linked successfully!</b>\n\n" +
+          "You're all set. Use /job to paste a job description and start applying."
+      )
+      return
+    } else {
+      await sendMessage(
+        botToken,
+        chatId,
+        "❌ <b>Linking failed:</b> " + escapeHtml(result.error ?? "Unknown error") + "\n\n" +
+          "The link may have expired. Please generate a new one from the dashboard."
+      )
+      return
+    }
+  }
+
   const existingLink = await ctx.runQuery(
     internal.telegramLinks.getLinkByTelegramChatId,
     { telegramChatId: chatId }

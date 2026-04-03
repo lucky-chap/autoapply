@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { auth0 } from "@/lib/auth0"
 import { redirect } from "next/navigation"
 import { OnboardingWizard } from "@/components/OnboardingWizard"
@@ -21,11 +22,13 @@ export default async function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <OnboardingWizard
-        userId={session.user.sub!}
-        userName={session.user.name ?? ""}
-        isGoogleConnected={isGoogleConnected}
-      />
+      <Suspense>
+        <OnboardingWizard
+          userId={session.user.sub!}
+          userName={session.user.name ?? ""}
+          isGoogleConnected={isGoogleConnected}
+        />
+      </Suspense>
     </div>
   )
 }

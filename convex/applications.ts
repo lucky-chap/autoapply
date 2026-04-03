@@ -174,6 +174,22 @@ export const getActiveApplications = internalQuery({
   },
 })
 
+export const hasApplicationForJob = internalQuery({
+  args: {
+    userId: v.string(),
+    jobListingId: v.id("jobListings"),
+  },
+  handler: async (ctx, { userId, jobListingId }) => {
+    const existing = await ctx.db
+      .query("applications")
+      .withIndex("by_userId_and_jobListingId", (q) =>
+        q.eq("userId", userId).eq("jobListingId", jobListingId)
+      )
+      .first()
+    return existing !== null
+  },
+})
+
 export const internalCreate = internalMutation({
   args: {
     userId: v.string(),
@@ -182,6 +198,7 @@ export const internalCreate = internalMutation({
     coverLetter: v.string(),
     recipientEmail: v.string(),
     source: v.optional(v.union(v.literal("web"), v.literal("telegram"))),
+    jobListingId: v.optional(v.id("jobListings")),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("applications", {

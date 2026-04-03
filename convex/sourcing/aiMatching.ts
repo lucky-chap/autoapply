@@ -154,13 +154,22 @@ Analyze the match based on these criteria:
 
         // Create a match record regardless of score (mark low scores as "ignored")
         // This prevents redundant AI evaluations in future cycles.
-        await ctx.runMutation(internal.sourcing.store.createMatch, {
+        const matchId: Id<"userJobMatches"> = await ctx.runMutation(internal.sourcing.store.createMatch, {
           userId,
           jobListingId: jobId,
           matchScore: score,
           matchReasoning: reasoning,
           status: score >= 60 ? "new" : "ignored",
         })
+
+        if (score >= 80) {
+          // Trigger automated outreach for high-quality matches
+          await ctx.scheduler.runAfter(0, internal.outreach.orchestrator.runPipelineForMatch, {
+            userId,
+            jobListingId: jobId,
+            matchId,
+          });
+        }
 
         if (score >= 60) {
           matched++

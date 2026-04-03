@@ -30,6 +30,23 @@ export async function POST(req: Request) {
     const { text } = await extractText(new Uint8Array(fileBuffer))
     const resumeText = text.join("\n").slice(0, 4000)
 
+    // Extract profile URLs from resume text
+    const urlRegex = /https?:\/\/[^\s<>"')\]]+/gi
+    const foundUrls = resumeText.match(urlRegex) ?? []
+    const githubUrl = foundUrls.find((u) =>
+      /github\.com\/[a-zA-Z0-9_-]+/i.test(u),
+    )
+    const linkedinUrl = foundUrls.find((u) =>
+      /linkedin\.com\/in\//i.test(u),
+    )
+    const portfolioUrl = foundUrls.find(
+      (u) =>
+        !u.includes("github.com") &&
+        !u.includes("linkedin.com") &&
+        !u.includes("googleapis.com") &&
+        !u.includes("google.com"),
+    )
+
     if (!resumeText.trim()) {
       return NextResponse.json(
         {
@@ -104,6 +121,9 @@ Rules:
       experience: parsed.experience,
       tone: parsed.tone,
       rawText: parsed.rawText,
+      ...(githubUrl ? { githubUrl } : {}),
+      ...(linkedinUrl ? { linkedinUrl } : {}),
+      ...(portfolioUrl ? { portfolioUrl } : {}),
     })
 
     return NextResponse.json({ success: true, profile: parsed })

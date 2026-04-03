@@ -80,8 +80,9 @@ export const processUpdate = internalAction({
 
     // ── Route commands ──
 
-    if (text === "/start") {
-      await handleStart(ctx, botToken, chatId, siteUrl)
+    if (text === "/start" || text.startsWith("/start ")) {
+      const deepLinkToken = text.startsWith("/start ") ? text.slice(7).trim() : undefined
+      await handleStart(ctx, botToken, chatId, siteUrl, deepLinkToken)
       return
     }
 
@@ -324,6 +325,7 @@ export const executeApprovedAction = internalAction({
             coverLetter: action.payload.coverLetter,
             recipientEmail: action.payload.to,
             source: "telegram" as const,
+            ...(action.jobListingId ? { jobListingId: action.jobListingId } : {}),
           }
         )
       }
