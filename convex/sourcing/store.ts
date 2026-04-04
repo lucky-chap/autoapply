@@ -222,6 +222,50 @@ export const getTopUnnotifiedMatches = internalQuery({
 })
 
 /**
+ * Get jobs that a user has NOT yet been evaluated against.
+ * This ensures the pipeline drains all stored jobs over time,
+ * instead of re-querying the same already-matched listings.
+ */
+export const getUnevaluatedJobsForUser = internalQuery({
+  args: {
+    userId: v.string(),
+    limit: v.optional(v.number()),
+    requireEmail: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { userId, limit, requireEmail }) => {
+    // Fetch a larger pool to filter from
+    const candidates = requireEmail
+      ? await ctx.db
+          .query("jobListings")
+          .withIndex("by_hasEmail_and_fetchedAt", (q) => q.eq("hasEmail", true))
+          .order("desc")
+          .take(200)
+      : await ctx.db
+          .query("jobListings")
+          .order("desc")
+          .take(200)
+
+    const results: Array<{ _id: typeof candidates[0]["_id"] }> = []
+    const cap = limit ?? 20
+
+    for (const job of candidates) {
+      if (results.length >= cap) break
+      const existing = await ctx.db
+        .query("userJobMatches")
+        .withIndex("by_userId_and_jobListingId", (q) =>
+          q.eq("userId", userId).eq("jobListingId", job._id)
+        )
+        .first()
+      if (!existing) {
+        results.push({ _id: job._id })
+      }
+    }
+
+    return results
+  },
+})
+
+/**
  * Mark a list of matches as notified on telegram to prevent duplicates.
  */
 export const markAsNotified = internalMutation({

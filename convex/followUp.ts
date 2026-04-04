@@ -4,7 +4,6 @@ import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 import { callGemini } from "./aiActions"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
-import { formatFollowUpSent } from "./openclaw"
 import { escapeHtml, sendMessage, buildApprovalButtons } from "./telegramHelpers"
 
 // ── Follow-up email generation ──
@@ -75,13 +74,6 @@ export const checkAndSendFollowUps = internalAction({
       const userInfo = await getUserEmail(managementToken, userId)
       const candidateName = userInfo?.name ?? "The Candidate"
 
-      // Check if user has auto mode enabled
-      const userSettings = await ctx.runQuery(
-        internal.userSettings.getByUserInternal,
-        { userId }
-      )
-      const isAutoMode = userSettings?.autoMode ?? false
-
       for (const app of userApps) {
         // Skip apps without a Gmail thread (can't reply without one)
         if (!app.gmailThreadId) continue
@@ -116,21 +108,7 @@ export const checkAndSendFollowUps = internalAction({
             id: app._id,
           })
 
-          if (isAutoMode) {
-            // Auto mode: approve immediately without Telegram preview
-            await ctx.runMutation(internal.pendingActions.internalApprove, {
-              id: pendingActionId as Id<"pendingActions">,
-            })
-            // Notify via OpenClaw
-            await ctx.runAction(internal.openclaw.sendNotification, {
-              userId,
-              message: formatFollowUpSent(app.company, app.role),
-            })
-            totalQueued++
-            continue
-          }
-
-          // Normal mode: send Telegram preview with approval buttons
+          // Send Telegram preview with approval buttons
           const preview = followUpBody.length > 300
             ? followUpBody.slice(0, 300) + "..."
             : followUpBody

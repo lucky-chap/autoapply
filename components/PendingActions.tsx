@@ -4,8 +4,32 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Id } from "@/convex/_generated/dataModel"
 import { useState } from "react"
-import { Clock, CheckCircle2, XCircle, Mail, Building2, Loader2 } from "lucide-react"
+import {
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Mail,
+  Building2,
+  Loader2,
+  MessageSquare,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
 export function PendingActions({ userId }: { userId: string }) {
   const pendingActions = useQuery(api.pendingActions.getByUser, { userId })
@@ -14,7 +38,24 @@ export function PendingActions({ userId }: { userId: string }) {
 
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
-  if (pendingActions === undefined || pendingActions.length === 0) {
+  if (pendingActions === undefined) {
+    return (
+      <Card className="border-black/5 shadow-sm">
+        <CardHeader className="border-b border-black/5 p-5">
+          <div className="flex items-center gap-2">
+            <CardTitle className="font-display text-xl font-semibold">
+              Pending Approvals
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="flex h-32 items-center justify-center text-sm text-black/40">
+          Loading...
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (pendingActions.length === 0) {
     return null
   }
 
@@ -41,72 +82,107 @@ export function PendingActions({ userId }: { userId: string }) {
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-black/15 bg-white">
-      <div className="border-b border-black/10 p-6">
-        <div className="flex items-center gap-2">
-          <Clock className="h-5 w-5 text-black/70" />
-          <h2 className="font-display text-xl font-bold text-primary">
-            Pending Approvals
-          </h2>
-          <Badge className="border border-black/20 bg-[#b8ff66] font-semibold text-black">
-            {pendingActions.length}
-          </Badge>
-        </div>
-        <p className="mt-1 text-sm text-black/60">
-          These applications are waiting for your approval before sending.
-        </p>
-      </div>
-      <div className="divide-y divide-black/10">
-        {pendingActions.map((action) => (
-          <div key={action._id} className="p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 shrink-0 text-black/45" />
-                  <p className="truncate font-semibold text-primary">
-                    {action.payload.company}
-                  </p>
-                </div>
-                <p className="mt-0.5 text-sm text-black/60">{action.payload.role}</p>
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-black/45">
-                  <Mail className="h-3 w-3" />
-                  {action.payload.to}
-                </div>
-                <p className="mt-2 line-clamp-2 text-xs text-black/60">
-                  {action.payload.coverLetter}
-                </p>
-                {action.source === "telegram" && (
-                  <Badge className="mt-2 border border-blue-200 bg-blue-50 text-[10px] text-blue-600">
-                    via Telegram
-                  </Badge>
-                )}
+    <Card className="overflow-hidden border-black/5 shadow-sm">
+      <CardHeader className="border-b border-black/5 p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <CardTitle className="font-display text-xl font-semibold text-black">
+                  Pending Approvals
+                </CardTitle>
+                <Badge className="h-5 border-black/10 bg-[#b8ff66] px-1.5 text-[10px] font-bold text-black hover:bg-[#b8ff66]/80">
+                  {pendingActions.length}
+                </Badge>
               </div>
-              <div className="flex shrink-0 gap-2">
-                <button
-                  onClick={() => handleApprove(action._id)}
-                  disabled={loadingId === action._id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-[#121212] px-3 py-2 text-xs font-bold text-white transition-all hover:bg-black disabled:opacity-50"
-                >
-                  {loadingId === action._id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  )}
-                  Approve
-                </button>
-                <button
-                  onClick={() => handleReject(action._id)}
-                  disabled={loadingId === action._id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-black/20 bg-white px-3 py-2 text-xs font-bold text-black/65 transition-all hover:bg-white disabled:opacity-50"
-                >
-                  <XCircle className="h-3.5 w-3.5" />
-                  Reject
-                </button>
-              </div>
+              <CardDescription className="text-sm text-black/50">
+                Wait for your approval before sending.
+              </CardDescription>
             </div>
           </div>
-        ))}
-      </div>
-    </section>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="pl-5">Company & Role</TableHead>
+              <TableHead className="hidden md:table-cell">Recipient</TableHead>
+              <TableHead className="pr-5 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pendingActions.map((action) => (
+              <TableRow
+                key={action._id}
+                className="group transition-colors hover:bg-black/1"
+              >
+                <TableCell className="py-4 pl-5 align-top">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/5">
+                      <Building2 className="h-4 w-4 text-black/40" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="leading-none font-semibold text-black">
+                        {action.payload.company}
+                      </p>
+                      <p className="mt-1.5 text-xs text-black/60">
+                        {action.payload.role}
+                      </p>
+                      <p className="mt-2 line-clamp-1 text-[11px] text-black/40 italic">
+                        "{action.payload.coverLetter.substring(0, 60)}..."
+                      </p>
+                      {action.source === "telegram" && (
+                        <Badge
+                          variant="outline"
+                          className="mt-2 h-4 border-blue-100 bg-blue-50/50 px-1 py-0 text-[10px] font-medium text-blue-600"
+                        >
+                          via Telegram
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="hidden py-4 align-top md:table-cell">
+                  <div className="flex items-center gap-1.5 text-xs text-black/60">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="max-w-[150px] truncate">
+                      {action.payload.to}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell className="py-4 pr-5 text-right align-top">
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleReject(action._id)}
+                      disabled={loadingId === action._id}
+                      className="h-8 rounded-full border-black/10 text-xs font-bold text-black/60 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <XCircle className="mr-1 h-3.5 w-3.5" />
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleApprove(action._id)}
+                      disabled={loadingId === action._id}
+                      className="h-8 rounded-full bg-black text-xs font-bold text-white transition-colors hover:bg-black/90"
+                    >
+                      {loadingId === action._id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      Approve
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 }

@@ -660,23 +660,32 @@ async function handleJobApply(
     )
 
     if (!emailResult.email) {
-      // Update match status so it won't reappear
+      // No email in description — try outreach pipeline (Tomba / pattern emails)
+      await sendMessage(botToken, chatId, "⏳ No email in the listing — searching for hiring contacts…")
+
       await ctx.runMutation(internal.sourcing.store.updateMatchStatus, {
         matchId,
         status: "approved",
       })
-      await sendMessage(
-        botToken, chatId,
-        `⚠️ <b>No recruiter email found</b> for ${escapeHtml(job.title)} at ${escapeHtml(job.company)}.\n\n` +
-          `<a href="${escapeHtml(job.url)}">Apply directly via the listing</a>`
+
+      // Run the outreach pipeline which tries Tomba + pattern emails
+      // and creates a pending action with Telegram context
+      await ctx.runAction(
+        internal.outreach.orchestrator.runPipelineForMatch,
+        {
+          userId: link.userId,
+          jobListingId: match.jobListingId,
+          matchId,
+          telegramChatId: chatId,
+        }
       )
-      
+
       // Load next job into the original message layout
       if (messageId) {
         await ctx.runAction(internal.sourcing.telegramNotify.renderJobMatchPage, {
           userId: link.userId,
           chatId,
-          index: currentIndex, // Index shouldn't change, the approved job effectively disappears from queue
+          index: currentIndex,
           messageId,
         })
       }

@@ -15,7 +15,6 @@ import {
   CircleDollarSign,
   CheckCircle2,
   AlertCircle,
-  Zap,
   Clock,
   Bell,
 } from "lucide-react"
@@ -34,7 +33,6 @@ export default function PreferencesPage() {
     api.userSettings.getByUser,
     userId ? { userId } : "skip"
   )
-  const toggleAutoMode = useMutation(api.userSettings.toggleAutoMode)
   const updateAvailability = useMutation(api.userSettings.updateAvailability)
   const updateOpenclawSettings = useMutation(
     api.userSettings.updateOpenclawSettings
@@ -47,7 +45,6 @@ export default function PreferencesPage() {
   const [roles, setRoles] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [minSalary, setMinSalary] = useState<number | "">("")
-  const [showAutoConfirm, setShowAutoConfirm] = useState(false)
 
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
   const DEFAULT_SCHEDULE = DAY_NAMES.map((_, i) => ({
@@ -107,15 +104,6 @@ export default function PreferencesPage() {
     }
   }
 
-  const handleAutoModeToggle = async () => {
-    if (!userId) return
-    if (!userSettings?.autoMode) {
-      setShowAutoConfirm(true)
-      return
-    }
-    await toggleAutoMode({ userId })
-  }
-
   const handleSaveAvailability = async () => {
     if (!userId) return
     setAvailSaving(true)
@@ -151,12 +139,6 @@ export default function PreferencesPage() {
     }
   }
 
-  const confirmAutoMode = async () => {
-    if (!userId) return
-    setShowAutoConfirm(false)
-    await toggleAutoMode({ userId })
-  }
-
   const addRole = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && e.currentTarget.value) {
       if (!roles.includes(e.currentTarget.value)) {
@@ -174,8 +156,6 @@ export default function PreferencesPage() {
       e.currentTarget.value = ""
     }
   }
-
-  const isAutoMode = userSettings?.autoMode ?? false
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">

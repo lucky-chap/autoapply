@@ -4,15 +4,15 @@ AI-powered job application automation. Scans job boards, finds hiring managers, 
 
 ## Features
 
-- **Job Sourcing** — Pulls listings from Hacker News "Who is Hiring" threads and Remotive, then AI-scores them against your profile
+- **Job Sourcing** — Pulls listings from Hacker News "Who is Hiring" threads, Remotive, and Arbeitnow, then AI-scores them against your profile
 - **Cover Letter Generation** — Vertex AI writes personalized cover letters based on your resume and the job description
-- **Prospect Enrichment** — Finds hiring managers via Apollo.io and People Data Labs
+- **Prospect Enrichment** — Finds hiring managers via Tomba.io, with pattern-based email fallback (careers@, jobs@, etc.)
 - **Outreach Pipeline** — End-to-end: find prospects, generate emails, queue for approval, send via Gmail
 - **Email Tracking** — Pixel-based open tracking and link click tracking per application
 - **Reply Classification** — AI detects interview invites, rejections, and follow-up needs from inbox replies
 - **Interview Scheduling** — Detects proposed times, checks Google Calendar conflicts, suggests free slots or confirms
 - **Auto Follow-up** — Sends follow-up emails after 5 days of silence
-- **Telegram Bot** — Full control via `/job`, `/link`, `/auto`, `/status`, `/salary`, `/links`, and more
+- **Telegram Bot** — Full control via `/job`, `/link`, `/status`, `/salary`, `/links`, and more
 - **Web Dashboard** — Application tracker, outreach stats, resume management, and preferences
 - **Step-Up Auth** — Sensitive actions (sending emails) require Auth0 login confirmation, even from Telegram
 
@@ -64,9 +64,9 @@ TELEGRAM_BOT_TOKEN=<bot-token>
 TELEGRAM_BOT_USERNAME=<bot-username>
 TELEGRAM_WEBHOOK_SECRET=<random-hex>
 
-# Enrichment (optional)
-APOLLO_API_KEY=<key>
-PDL_API_KEY=<key>
+# Enrichment (optional — Tomba.io free tier: 25 searches/month)
+TOMBA_API_KEY=<key>
+TOMBA_SECRET=<secret>
 
 # Security
 ENCRYPTION_SECRET=<random-32-byte-hex>
@@ -114,7 +114,6 @@ pnpm dev          # Terminal 2
 | `/job` | Enter job description mode |
 | `/link` | Link Telegram to your web account |
 | `/unlink` | Remove Telegram link |
-| `/auto` | Toggle auto-send mode |
 | `/salary` | Set minimum salary filter |
 | `/links` | Manage profile links (GitHub, LinkedIn, etc.) |
 | `/status` | View recent application stats |

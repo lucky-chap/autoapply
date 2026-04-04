@@ -6,7 +6,7 @@
  * to helper modules:
  *
  *   telegramHelpers.ts   — API wrappers, email encoding, escaping
- *   telegramCommands.ts  — /start, /link, /unlink, /salary, /auto, /clear, /status, /job
+ *   telegramCommands.ts  — /start, /link, /unlink, /salary, /clear, /status, /job
  *   telegramCallbacks.ts — inline-keyboard button handlers
  *   telegramJobFlow.ts   — job description processing & application creation
  */
@@ -31,7 +31,6 @@ import {
   handleLink,
   handleUnlink,
   handleSalary,
-  handleAuto,
   handleClear,
   handleStatus,
   handleJob,
@@ -114,23 +113,6 @@ export const processUpdate = internalAction({
         return
       }
       await handleSalary(ctx, botToken, chatId, text, link.userId)
-      return
-    }
-
-    if (text === "/auto") {
-      const link = await ctx.runQuery(
-        internal.telegramLinks.getLinkByTelegramChatId,
-        { telegramChatId: chatId }
-      )
-      if (!link) {
-        await sendMessage(
-          botToken,
-          chatId,
-          "⚠️ Account not linked. Use /link first."
-        )
-        return
-      }
-      await handleAuto(ctx, botToken, chatId, link.userId)
       return
     }
 
@@ -274,7 +256,6 @@ export const processUpdate = internalAction({
         "/job — Paste a job description with a recruiter email\n" +
         "/status — Check recent applications\n" +
         "/salary — Set minimum salary alert\n" +
-        "/auto — Toggle auto mode\n" +
         "/clear — Clear chat state\n\n" +
         "<i>Send /job first, then paste your job description.</i>"
     )

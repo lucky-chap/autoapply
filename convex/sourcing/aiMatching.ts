@@ -46,9 +46,17 @@ export const evaluateJobsForUser = internalAction({
       .join("\n")
 
     let matched = 0
+    const MAX_MATCHES_PER_CYCLE = 3
 
     // Process jobs one at a time to stay within action limits
     for (const jobId of jobIds) {
+      // Cap enrichment API usage: stop after 3 matches per cycle
+      if (matched >= MAX_MATCHES_PER_CYCLE) {
+        console.log(
+          `Reached match cap (${MAX_MATCHES_PER_CYCLE}) for ${userId}, stopping early to conserve API credits`
+        )
+        break
+      }
       // Check if match already exists
       const alreadyMatched: boolean = await ctx.runQuery(
         internal.sourcing.store.hasMatch,
@@ -141,19 +149,6 @@ Return ONLY the JSON object, NO markdown formatting.`
             status: score >= 60 ? "new" : "ignored",
           }
         )
-
-        if (score >= 80) {
-          // Trigger automated outreach for high-quality matches
-          await ctx.scheduler.runAfter(
-            0,
-            internal.outreach.orchestrator.runPipelineForMatch,
-            {
-              userId,
-              jobListingId: jobId,
-              matchId,
-            }
-          )
-        }
 
         if (score >= 60) {
           matched++

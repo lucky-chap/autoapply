@@ -174,9 +174,8 @@ export default defineSchema({
 
   userSettings: defineTable({
     userId: v.string(),
-    autoMode: v.boolean(),
-    autoModeEnabledAt: v.optional(v.number()),
     onboardingCompleted: v.boolean(),
+    autoMode: v.optional(v.boolean()),
     openclawGatewayUrl: v.optional(v.string()),
     openclawGatewayToken: v.optional(v.string()),
     openclawEnabled: v.optional(v.boolean()),

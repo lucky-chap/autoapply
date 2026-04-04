@@ -13,6 +13,10 @@ import {
   Search,
 } from "lucide-react"
 import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 export function DiscoveredJobs({ userId }: { userId: string }) {
   const [filter, setFilter] = useState<"new" | "approved" | "ignored">("new")
@@ -31,42 +35,45 @@ export function DiscoveredJobs({ userId }: { userId: string }) {
   }
 
   const filterTabs = [
-    { key: "new" as const, label: "New", count: null },
-    { key: "approved" as const, label: "Approved", count: null },
-    { key: "ignored" as const, label: "Ignored", count: null },
+    { key: "new" as const, label: "New" },
+    { key: "approved" as const, label: "Approved" },
+    { key: "ignored" as const, label: "Ignored" },
   ]
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-black/15 bg-white">
-      <div className="flex items-center justify-between border-b border-black/10 p-5">
-        <div className="flex items-center gap-3">
-          <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
-            <Search className="h-4 w-4" />
-          </div>
-          <div>
-            <h2 className="font-display text-xl font-semibold">
-              Discovered Jobs
-            </h2>
-            <p className="text-sm text-black/60">
-              AI-matched from open job boards.
-            </p>
+    <Card className="border-black/5 shadow-sm overflow-hidden">
+      <CardHeader className="border-b border-black/5 p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              <Search className="h-4.5 w-4.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <CardTitle className="font-display text-xl font-semibold text-black">
+                  Discovered Jobs
+                </CardTitle>
+                <Badge variant="outline" className="h-5 text-[10px] font-bold border-blue-100 bg-blue-50/50 text-blue-600 uppercase">
+                  Auto
+                </Badge>
+              </div>
+              <CardDescription className="text-sm text-black/50">
+                AI-matched from open job boards.
+              </CardDescription>
+            </div>
           </div>
         </div>
-        <span className="rounded bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700 uppercase">
-          Auto
-        </span>
-      </div>
+      </CardHeader>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 border-b border-black/10 px-5 py-2">
+      <div className="flex gap-1 border-b border-black/5 px-5 py-2 bg-black/1">
         {filterTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setFilter(tab.key)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`rounded-lg px-3 py-1.5 text-[11px] font-bold tracking-tight transition-colors ${
               filter === tab.key
-                ? "bg-[#121212] text-white"
-                : "text-black/60 hover:bg-black/5"
+                ? "bg-black text-white"
+                : "text-black/50 hover:bg-black/5"
             }`}
           >
             {tab.label}
@@ -74,114 +81,131 @@ export function DiscoveredJobs({ userId }: { userId: string }) {
         ))}
       </div>
 
-      <div className="max-h-[480px] overflow-y-auto">
-        {matches === undefined ? (
-          <div className="p-8 text-center text-sm text-black/50">
-            Loading matches…
-          </div>
-        ) : matches.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-black/5">
-              <Sparkles className="h-5 w-5 text-black/40" />
+      <CardContent className="p-0">
+        <div className="max-h-[500px] overflow-y-auto">
+          {matches === undefined ? (
+            <div className="flex h-40 items-center justify-center text-sm text-black/40">
+              Loading matches...
             </div>
-            <p className="text-sm font-medium text-black/70">
-              {filter === "new"
-                ? "No new matches yet"
-                : filter === "approved"
-                  ? "No approved jobs"
-                  : "No ignored jobs"}
-            </p>
-            <p className="mt-1 text-xs text-black/50">
-              {filter === "new"
-                ? "Jobs matching your profile will appear here automatically."
-                : ""}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-black/5">
-            {matches.map((match) => (
-              <div
-                key={match._id}
-                className="group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-black/[0.02]"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2">
-                    <h3 className="text-sm font-semibold leading-tight truncate">
-                      {match.job.title}
-                    </h3>
-                    {match.matchScore && (
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          match.matchScore >= 80
-                            ? "bg-green-100 text-green-700"
-                            : match.matchScore >= 60
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {match.matchScore}%
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-black/55">
-                    <span className="flex items-center gap-1">
-                      <Briefcase className="h-3 w-3" />
-                      {match.job.company}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {match.job.location}
-                    </span>
-                    {match.job.salary && (
-                      <span className="font-medium text-green-700">
-                        {match.job.salary}
-                      </span>
-                    )}
-                  </div>
-
-                  {match.matchReasoning && (
-                    <p className="mt-1.5 text-xs leading-relaxed text-black/50 line-clamp-2">
-                      {match.matchReasoning}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <a
-                    href={match.job.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg border border-black/10 p-1.5 text-black/50 transition-colors hover:bg-black/5 hover:text-black"
-                    title="View listing"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-
-                  {filter === "new" && (
-                    <>
-                      <button
-                        onClick={() => handleApprove(match._id)}
-                        className="rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-700 transition-colors hover:bg-green-100"
-                        title="Approve"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleIgnore(match._id)}
-                        className="rounded-lg border border-black/10 p-1.5 text-black/40 transition-colors hover:bg-red-50 hover:text-red-600"
-                        title="Ignore"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </>
-                  )}
-                </div>
+          ) : matches.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-black/5">
+                <Sparkles className="h-5 w-5 text-black/20" />
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </article>
+              <p className="text-sm font-medium text-black/60">
+                {filter === "new"
+                  ? "No new matches yet"
+                  : filter === "approved"
+                    ? "No approved jobs"
+                    : "No ignored jobs"}
+              </p>
+              <p className="mt-1 text-xs text-black/40 px-6 max-w-xs">
+                {filter === "new"
+                  ? "Jobs matching your profile will appear here automatically."
+                  : ""}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-5">Job Details</TableHead>
+                  <TableHead className="hidden sm:table-cell">Match</TableHead>
+                  <TableHead className="text-right pr-5">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {matches.map((match) => (
+                  <TableRow key={match._id} className="group transition-colors hover:bg-black/1">
+                    <TableCell className="py-4 pl-5 align-top">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-black leading-none truncate max-w-[200px]">
+                            {match.job.title}
+                          </p>
+                          {match.job.salary && (
+                            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 rounded cursor-default" title="Salary range">
+                              {match.job.salary}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2.5 text-[11px] text-black/50">
+                          <span className="flex items-center gap-1">
+                            <Briefcase className="h-3 w-3" />
+                            {match.job.company}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {match.job.location}
+                          </span>
+                        </div>
+                        {match.matchReasoning && (
+                          <p className="mt-2 text-[11px] leading-relaxed text-black/40 line-clamp-2 max-w-sm">
+                            {match.matchReasoning}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4 hidden sm:table-cell align-top">
+                      {match.matchScore && (
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                             <div className="h-1.5 w-16 bg-black/5 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    match.matchScore >= 80 ? "bg-green-500" : 
+                                    match.matchScore >= 60 ? "bg-amber-500" : "bg-gray-400"
+                                  }`}
+                                  style={{ width: `${match.matchScore}%` }}
+                                />
+                             </div>
+                             <span className="text-[10px] font-bold text-black/60">{match.matchScore}%</span>
+                          </div>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-4 pr-5 text-right align-top">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <a 
+                          href={match.job.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          title="View Listing"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 bg-white text-black/40 transition-colors hover:bg-black/5 hover:text-black"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+
+                        {filter === "new" && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleIgnore(match._id)}
+                              className="h-8 w-8 rounded-lg border-black/10 text-black/40 hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-colors"
+                              title="Ignore"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              onClick={() => handleApprove(match._id)}
+                              className="h-8 w-8 rounded-lg bg-black text-white hover:bg-black/90 transition-colors"
+                              title="Approve"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

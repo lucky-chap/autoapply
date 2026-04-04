@@ -11,7 +11,6 @@ import { ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 import { extractJobInfoHelper, generateCoverLetterHelper } from "./aiActions"
-import { formatApplicationSent } from "./openclaw"
 import { escapeHtml, sendMessage, buildApprovalButtons } from "./telegramHelpers"
 
 // ── Create pending action and send preview to Telegram ──
@@ -225,35 +224,5 @@ export async function continueWithApplication(
     coverLetter,
   }
 
-  // Check if auto mode is enabled
-  const settings = await ctx.runQuery(
-    internal.userSettings.getByUserInternal,
-    { userId }
-  )
-
-  if (settings?.autoMode) {
-    const pendingActionId = await ctx.runMutation(
-      internal.pendingActions.create,
-      {
-        userId,
-        actionType: "send_email" as const,
-        payload,
-        telegramChatId: chatId,
-        source: "telegram" as const,
-      }
-    )
-    await ctx.runMutation(internal.pendingActions.internalApprove, {
-      id: pendingActionId as Id<"pendingActions">,
-    })
-    await sendMessage(
-      botToken, chatId,
-      `🤖 <b>Auto Mode</b> — Sending application to <b>${escapeHtml(company)}</b> (${escapeHtml(role)})...`
-    )
-    await ctx.runAction(internal.openclaw.sendNotification, {
-      userId,
-      message: formatApplicationSent(company, role),
-    })
-  } else {
-    await createPendingActionAndPreview(ctx, botToken, chatId, userId, payload)
-  }
+  await createPendingActionAndPreview(ctx, botToken, chatId, userId, payload)
 }

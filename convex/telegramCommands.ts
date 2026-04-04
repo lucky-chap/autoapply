@@ -1,6 +1,6 @@
 /**
  * Telegram bot command handlers — /start, /link, /unlink, /salary,
- * /auto, /clear, /status, /job.
+ * /clear, /status, /job.
  *
  * Each handler is a plain async function called from processUpdate
  * in telegram.ts. They receive the ActionCtx, botToken, chatId,
@@ -79,7 +79,6 @@ export async function handleStart(
       "/status — Check your recent applications\n" +
       "/salary — Set minimum salary alert\n" +
       "/links — Set GitHub, LinkedIn, portfolio URLs\n" +
-      "/auto — Toggle auto mode (send without approval)\n" +
       "/clear — Clear all pending chat state"
   )
 }
@@ -230,38 +229,6 @@ export async function handleSalary(
   )
 }
 
-// ── /auto ──
-
-export async function handleAuto(
-  ctx: ActionCtx,
-  botToken: string,
-  chatId: string,
-  userId: string
-) {
-  const newAutoMode = await ctx.runMutation(
-    internal.userSettings.internalToggleAutoMode,
-    { userId }
-  )
-  if (newAutoMode) {
-    await sendMessage(
-      botToken,
-      chatId,
-      "🤖 <b>Auto Mode: ON</b>\n\n" +
-        "Applications will now be sent <b>automatically</b> without requiring your approval.\n\n" +
-        "⚠️ Cover letters will be generated and emailed immediately when you send a job description.\n\n" +
-        "Use /auto again to turn it off."
-    )
-  } else {
-    await sendMessage(
-      botToken,
-      chatId,
-      "✋ <b>Auto Mode: OFF</b>\n\n" +
-        "Applications will require your approval before sending.\n\n" +
-        "Use /auto again to turn it on."
-    )
-  }
-}
-
 // ── /clear ──
 
 export async function handleClear(
@@ -302,7 +269,6 @@ export async function handleStatus(
     `${check(diag.hasResumeProfile)} Resume uploaded`,
     `${check(diag.hasTargetRoles)} Target roles configured`,
     `${check(diag.hasTelegramLink)} Telegram linked`,
-    `${check(diag.autoModeEnabled)} Auto mode enabled`,
     `${check(diag.hasGmailToken)} Gmail connected`,
   ]
 
@@ -334,7 +300,7 @@ export async function handleStatus(
   const headerEmoji = allOk ? "\u2705" : "\u26a0\ufe0f"
   const headerText = allOk
     ? "Pipeline is healthy"
-    : "Pipeline has issues — auto-apply may not work"
+    : "Pipeline has issues"
 
   let msg = `${headerEmoji} <b>${headerText}</b>\n\n${healthLines.join("\n")}`
 

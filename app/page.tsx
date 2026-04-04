@@ -86,7 +86,7 @@ const AppWritingGraphic = () => (
 
 const PipelineGraphic = () => (
   <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-black/5 bg-[#fcfcfc] p-4 shadow-[0_15px_30px_rgba(30,26,38,0.14)]">
-    <div className="mb-4 text-[10px] font-semibold tracking-[0.15em] text-black/40 uppercase">
+    <div className="mb-4 text-[10px] font-semibold tracking-widest text-black/40 uppercase">
       Active Pipeline
     </div>
     <div className="flex flex-1 flex-col justify-center gap-3">
@@ -210,7 +210,7 @@ export default async function Home() {
             {primaryLabel}
             <ArrowRight className="h-4 w-4" />
           </a>
-          <p className="mt-4 text-xs tracking-[0.12em] text-black/35 uppercase">
+          <p className="mt-4 text-xs tracking-widest text-black/35 uppercase">
             Free forever. No credit card required
           </p>
         </section>
@@ -235,7 +235,7 @@ export default async function Home() {
         </section>
 
         <section className="mx-auto mt-24 max-w-4xl px-4 text-center sm:mt-32 sm:px-6 lg:px-8">
-          <p className="text-sm font-semibold tracking-[0.1em] text-black/40 uppercase">
+          <p className="text-sm font-semibold tracking-widest text-black/40 uppercase">
             Candidates secured interviews at
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-6 sm:gap-10">

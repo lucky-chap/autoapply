@@ -26,6 +26,13 @@ import { TelegramLinkedDialog } from "@/components/TelegramLinkedDialog"
 import { OnboardingGuard } from "@/components/OnboardingGuard"
 import { DiscoveredJobs } from "@/components/DiscoveredJobs"
 import { TokenSync } from "@/components/TokenSync"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card"
 
 export default async function DashboardPage() {
   const session = await auth0.getSession()
@@ -42,125 +49,84 @@ export default async function DashboardPage() {
         <TelegramLinkedDialog />
 
         <div className="mx-auto w-full max-w-6xl">
-          <section className="p-5 sm:p-7">
+          <section className="px-5 py-8 sm:px-7">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <h1 className="font-display text-4xl font-semibold tracking-tight text-black sm:text-5xl md:leading-[1.1]">
+                <h1 className="font-display text-4xl leading-tight font-semibold tracking-tight text-black sm:text-5xl">
                   Welcome back, {user.name?.split(" ")[0]}
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60 sm:text-base">
-                  Your application cockpit for managing roles, drafts, and engagement.
+                  Your application cockpit for managing roles, drafts, and
+                  engagement.
                 </p>
               </div>
               <Link
                 href="/dashboard/new"
-                className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-xs font-semibold tracking-[0.08em] text-white uppercase hover:bg-black/90"
+                className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-xs font-semibold tracking-widest text-white uppercase transition-colors hover:bg-black/90"
               >
                 <Plus className="h-3.5 w-3.5" />
                 New application
               </Link>
             </div>
 
-            <div
-              id="overview"
-              className="mt-8 grid gap-6 lg:grid-cols-[1fr_0.72fr]"
-            >
-              <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm sm:p-8">
-                <span className="text-xs font-semibold tracking-widest text-black/40 uppercase">
-                  Current activity
-                </span>
-                <p className="mt-4 max-w-xl text-sm leading-relaxed text-black/70 sm:text-base">
-                  Generate role-specific drafts, approve sends from Gmail, and
-                  monitor engagement from one dashboard.
-                </p>
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <Link
-                    href="/dashboard/new"
-                    className="inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-xs font-semibold tracking-[0.08em] text-white uppercase"
-                  >
-                    Start application
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    href="/dashboard/preferences"
-                    className="inline-flex items-center rounded-full border border-black/10 bg-transparent px-5 py-3 text-xs font-semibold tracking-[0.08em] text-black uppercase hover:bg-black/5"
-                  >
-                    Preferences
-                  </Link>
-                </div>
-              </div>
-
-              <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-                <DashboardWeeklyFocus userId={user.sub} />
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
+            <div className="mt-10">
               <DashboardStatCards userId={user.sub} />
             </div>
           </section>
 
-          <section
-            id="applications"
-            className="mt-7 grid grid-cols-1 gap-6 p-5 sm:p-7 lg:grid-cols-[1.5fr_0.85fr]"
-          >
-            <div className="space-y-6">
-              <ResumeProfileBox userId={user.sub} />
-              <PendingActions userId={user.sub} />
-              <DiscoveredJobs userId={user.sub} />
-
-              <article className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-black/5 p-5">
-                  <div>
-                    <h2 className="font-display text-2xl font-semibold text-black">
-                      Application pipeline
-                    </h2>
-                    <p className="text-sm text-black/50">
-                      Recent applications, status updates, and outcomes.
-                    </p>
-                  </div>
+          <section className="grid grid-cols-1 gap-6 px-5 pb-12 sm:px-7 lg:grid-cols-[1fr_0.45fr]">
+            <div className="space-y-8">
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-sm font-bold tracking-widest text-black/40 uppercase">
+                    High Priority
+                  </h2>
                 </div>
-                <div className="p-3">
-                  <ApplicationsTable userId={user.sub} />
-                </div>
-              </article>
-            </div>
-
-            <aside className="space-y-5">
-              <div className="rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
-                <CheckInboxButton />
+                <PendingActions userId={user.sub} />
               </div>
 
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-sm font-bold tracking-widest text-black/40 uppercase">
+                    Match Opportunities
+                  </h2>
+                </div>
+                <DiscoveredJobs userId={user.sub} />
+              </div>
+
+              <div>
+                <Card className="overflow-hidden border-black/5 shadow-sm">
+                  <CardHeader className="border-b border-black/5 p-5">
+                    <CardTitle className="font-display text-2xl font-semibold text-black">
+                      Application pipeline
+                    </CardTitle>
+                    <CardDescription className="text-sm text-black/50">
+                      Recent applications, status updates, and outcomes.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="p-3">
+                      <ApplicationsTable userId={user.sub} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            <aside className="-col-start-1 w-full space-y-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-bold tracking-widest text-black/40 uppercase">
+                  Weekly Focus
+                </h2>
+              </div>
+              <Card className="overflow-hidden border-black/5 shadow-sm">
+                <DashboardWeeklyFocus userId={user.sub} />
+              </Card>
+
+              <ResumeProfileBox userId={user.sub} />
+              <CheckInboxButton />
+
               <TelegramLinkCard userId={user.sub} />
-
-              <article className="rounded-2xl border border-black/5 bg-[#fafafa] p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <ShieldCheck className="mt-0.5 h-5 w-5 text-black/70" />
-                  <div>
-                    <p className="font-semibold text-black">
-                      Approval protection enabled
-                    </p>
-                    <p className="mt-1 text-sm text-black/50">
-                      Every send request requires confirmation before dispatch.
-                    </p>
-                  </div>
-                </div>
-              </article>
-
-              <article className="rounded-2xl border border-black/5 bg-[#fafafa] p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <Mail className="mt-0.5 h-5 w-5 text-black/70" />
-                  <div>
-                    <p className="font-semibold text-black">
-                      Inbox monitoring active
-                    </p>
-                    <p className="mt-1 text-sm text-black/50">
-                      We keep checking for opens and replies to update your
-                      timeline.
-                    </p>
-                  </div>
-                </div>
-              </article>
             </aside>
           </section>
         </div>

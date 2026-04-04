@@ -85,47 +85,45 @@ export const pollJobBoards = internalAction({
     // 4b. HN "Who is Hiring" — monthly thread, idempotent (deduped by commentId)
     await ctx.runAction(internal.sourcing.hackernews.fetchAndStore, {})
 
-    // 5. Get jobs to evaluate, prioritizing those with emails
-    // Email jobs get 80% of the AI budget (auto-apply-able),
-    // plus a batch of no-email jobs for manual-mode users.
-    const emailJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
-      internal.sourcing.store.getLatestListingsWithEmail,
-      { limit: 16 }
-    )
-    const allJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
-      internal.sourcing.store.getLatestListings,
-      { limit: 4 }
-    )
+    // 4c. Arbeitnow — broad tech job listings (no search filter, deduped by slug)
+    await ctx.runAction(internal.sourcing.arbeitnow.fetchAndStore, {
+      limit: 100,
+    })
 
-    // Merge and deduplicate
-    const seenIds = new Set<string>()
-    const latestJobs: Array<{ _id: Id<"jobListings"> }> = []
-    for (const job of [...emailJobs, ...allJobs]) {
-      if (!seenIds.has(job._id)) {
-        seenIds.add(job._id)
-        latestJobs.push(job)
-      }
-    }
-
-    if (latestJobs.length === 0) {
-      console.log("JobBoard cron: no jobs in database to evaluate")
-      return
-    }
-
-    const jobIdsToEvaluate = latestJobs.map((j) => j._id)
-    console.log(`JobBoard cron: Evaluating ${jobIdsToEvaluate.length} jobs for ${activeUsers.length} users`)
-
-    // 6. Match jobs against each user
-    // Wrap in try/catch so a timeout or error in matching doesn't prevent
-    // dispatching already-created matches from this or previous cycles.
+    // 5–6. Per-user: find unevaluated jobs, then run AI matching.
+    // Uses getUnevaluatedJobsForUser so the pipeline drains ALL stored
+    // jobs over time instead of re-querying the same already-matched ones.
     for (const user of activeUsers) {
       try {
+        const emailJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
+          internal.sourcing.store.getUnevaluatedJobsForUser,
+          { userId: user.userId, limit: 10, requireEmail: true }
+        )
+        const anyJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
+          internal.sourcing.store.getUnevaluatedJobsForUser,
+          { userId: user.userId, limit: 5 }
+        )
+
+        // Merge and deduplicate
+        const seenIds = new Set<string>()
+        const jobIds: Id<"jobListings">[] = []
+        for (const job of [...emailJobs, ...anyJobs]) {
+          if (!seenIds.has(job._id)) {
+            seenIds.add(job._id)
+            jobIds.push(job._id)
+          }
+        }
+
+        if (jobIds.length === 0) {
+          console.log(`JobBoard cron: no unevaluated jobs for ${user.userId}`)
+          continue
+        }
+
+        console.log(`JobBoard cron: Evaluating ${jobIds.length} unevaluated jobs for ${user.userId}`)
+
         await ctx.runAction(
           internal.sourcing.aiMatching.evaluateJobsForUser,
-          {
-            userId: user.userId,
-            jobIds: jobIdsToEvaluate,
-          }
+          { userId: user.userId, jobIds }
         )
       } catch (e) {
         console.error(`AI matching failed for ${user.userId}:`, e)
@@ -148,18 +146,18 @@ export const pollJobBoards = internalAction({
       }
     }
 
-    // 8. Alert auto-mode users who got zero dispatches
+    // 8. Alert users who got zero dispatches
     if (totalDispatched === 0) {
       console.warn("JobBoard cron: cycle complete with ZERO dispatches")
       for (const user of activeUsers) {
         const diag = userDiags[user.userId]
-        if (diag?.autoModeEnabled && diag?.hasTelegramLink) {
+        if (diag?.hasTelegramLink) {
           const issues = getDiagnosticIssues(diag)
           if (issues.length > 0) {
             await alertUserIfLinked(
               ctx,
               user.userId,
-              `Auto-apply cycle completed but no applications were sent.\n\n` +
+              `Job sourcing cycle completed but no new matches were found.\n\n` +
                 `Issues detected:\n${issues.map((i) => `- ${i}`).join("\n")}\n\n` +
                 `Use /status to see your full pipeline health.`
             )
@@ -178,7 +176,6 @@ interface PipelineDiagnostic {
   hasResumeProfile: boolean
   hasTargetRoles: boolean
   hasTelegramLink: boolean
-  autoModeEnabled: boolean
   hasGmailToken: boolean
   pendingMatchCount: number
   recentMatchCount: number
@@ -190,7 +187,6 @@ function getDiagnosticIssues(diag: PipelineDiagnostic): string[] {
   if (!diag.hasResumeProfile) issues.push("No resume uploaded")
   if (!diag.hasTargetRoles) issues.push("No target roles configured")
   if (!diag.hasTelegramLink) issues.push("Telegram not linked")
-  if (!diag.autoModeEnabled) issues.push("Auto mode is OFF")
   if (!diag.hasGmailToken) issues.push("Gmail not connected (re-auth needed)")
   if (diag.pendingMatchCount === 0 && diag.recentMatchCount === 0) {
     issues.push("No matching jobs found this cycle")
@@ -258,11 +254,6 @@ export const getPipelineDiagnostic = internalQuery({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first()
 
-    const settings = await ctx.db
-      .query("userSettings")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .first()
-
     const tokenData = await ctx.db
       .query("userTokens")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
@@ -300,7 +291,6 @@ export const getPipelineDiagnostic = internalQuery({
       hasResumeProfile: profile !== null,
       hasTargetRoles: (prefs?.targetRoles?.length ?? 0) > 0,
       hasTelegramLink: telegramLink !== null,
-      autoModeEnabled: settings?.autoMode === true,
       hasGmailToken: tokenData?.auth0RefreshToken != null,
       pendingMatchCount,
       recentMatchCount,

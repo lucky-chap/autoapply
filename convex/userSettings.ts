@@ -2,7 +2,6 @@ import {
   query,
   mutation,
   internalQuery,
-  internalMutation,
 } from "./_generated/server"
 import { v } from "convex/values"
 
@@ -37,60 +36,6 @@ export const getByUserInternal = internalQuery({
   },
 })
 
-export const toggleAutoMode = mutation({
-  args: { userId: v.string() },
-  handler: async (ctx, { userId }) => {
-    const existing = await ctx.db
-      .query("userSettings")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .first()
-
-    if (existing) {
-      const newAutoMode = !existing.autoMode
-      await ctx.db.patch(existing._id, {
-        autoMode: newAutoMode,
-        ...(newAutoMode ? { autoModeEnabledAt: Date.now() } : {}),
-      })
-      return newAutoMode
-    } else {
-      await ctx.db.insert("userSettings", {
-        userId,
-        autoMode: true,
-        autoModeEnabledAt: Date.now(),
-        onboardingCompleted: false,
-      })
-      return true
-    }
-  },
-})
-
-export const internalToggleAutoMode = internalMutation({
-  args: { userId: v.string() },
-  handler: async (ctx, { userId }) => {
-    const existing = await ctx.db
-      .query("userSettings")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .first()
-
-    if (existing) {
-      const newAutoMode = !existing.autoMode
-      await ctx.db.patch(existing._id, {
-        autoMode: newAutoMode,
-        ...(newAutoMode ? { autoModeEnabledAt: Date.now() } : {}),
-      })
-      return newAutoMode
-    } else {
-      await ctx.db.insert("userSettings", {
-        userId,
-        autoMode: true,
-        autoModeEnabledAt: Date.now(),
-        onboardingCompleted: false,
-      })
-      return true
-    }
-  },
-})
-
 export const updateAvailability = mutation({
   args: {
     userId: v.string(),
@@ -107,7 +52,6 @@ export const updateAvailability = mutation({
     } else {
       await ctx.db.insert("userSettings", {
         userId,
-        autoMode: false,
         onboardingCompleted: false,
         availabilitySchedule,
       })
@@ -133,7 +77,6 @@ export const updateOpenclawSettings = mutation({
     } else {
       await ctx.db.insert("userSettings", {
         userId,
-        autoMode: false,
         onboardingCompleted: false,
         ...settings,
       })
@@ -154,7 +97,6 @@ export const completeOnboarding = mutation({
     } else {
       await ctx.db.insert("userSettings", {
         userId,
-        autoMode: false,
         onboardingCompleted: true,
       })
     }

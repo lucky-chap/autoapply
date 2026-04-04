@@ -28,6 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 
 const statusStyles: Record<string, string> = {
   Applied: "border-blue-200 bg-blue-50 text-blue-700",
@@ -47,6 +49,9 @@ type DashboardApplication = {
   emailSentAt?: number
   openCount?: number
   clickCount?: number
+  company: string
+  role: string
+  recipientEmail: string
 }
 
 type DashboardMetrics = {
@@ -180,23 +185,29 @@ export function DashboardWeeklyFocus({ userId }: { userId: string }) {
 
   if (applications === undefined) {
     return (
-      <div className="rounded-3xl border border-black/15 bg-white p-6">
-        <div className="h-3 w-24 animate-pulse rounded bg-gray-100" />
-        <div className="mt-4 space-y-4">
+      <div className="rounded-2xl border border-black/5 bg-white p-6">
+        <Skeleton className="h-4 w-24" />
+        <div className="mt-6 space-y-6">
           <div className="space-y-2">
-            <div className="h-3 w-32 animate-pulse rounded bg-gray-100" />
-            <div className="h-2 animate-pulse rounded-full bg-gray-100" />
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-10" />
+            </div>
+            <Skeleton className="h-2 w-full rounded-full" />
           </div>
           <div className="space-y-2">
-            <div className="h-3 w-28 animate-pulse rounded bg-gray-100" />
-            <div className="h-2 animate-pulse rounded-full bg-gray-100" />
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-10" />
+            </div>
+            <Skeleton className="h-2 w-full rounded-full" />
           </div>
         </div>
       </div>
     )
   }
 
-  const metrics = getDashboardMetrics(applications)
+  const metrics = getDashboardMetrics(applications as DashboardApplication[])
   const focusCopy =
     metrics.totalSent === 0
       ? "No applications yet. Send one today to unlock your trend data."
@@ -205,44 +216,51 @@ export function DashboardWeeklyFocus({ userId }: { userId: string }) {
         : "Try tightening your opener around two exact job requirements."
 
   return (
-    <div className="rounded-3xl border border-black/15 bg-white p-6">
-      <p className="text-xs font-semibold tracking-widest text-black/60 uppercase">
-        Weekly focus
+    <div className="p-6 py-0">
+      <p className="text-[10px] font-bold tracking-[0.2em] text-black/40 uppercase">
+        Targets
       </p>
-      <div className="mt-4 space-y-4">
+      <div className="mt-6 space-y-6">
         <div>
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase">
+          <div className="mb-2.5 flex items-center justify-between text-[11px] font-bold tracking-tight text-black/60 uppercase">
             <span>Send target</span>
-            <span>
+            <span className="text-black">
               {metrics.weekSent} / {metrics.sendTarget}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-black/15">
+          <div className="h-1.5 overflow-hidden rounded-full bg-black/5">
             <div
-              className="h-2 rounded-full bg-[#b8ff66] transition-all duration-500"
+              className="h-full bg-[#b8ff66] transition-all duration-700 ease-out"
               style={{ width: `${metrics.sendProgress}%` }}
             />
           </div>
         </div>
         <div>
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase">
+          <div className="mb-2.5 flex items-center justify-between text-[11px] font-bold tracking-tight text-black/60 uppercase">
             <span>Reply target</span>
-            <span>
+            <span className="text-black">
               {metrics.weekReplies} / {metrics.replyTarget}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-black/15">
+          <div className="h-1.5 overflow-hidden rounded-full bg-black/5">
             <div
-              className="h-2 rounded-full bg-black transition-all duration-500"
+              className="h-full bg-black transition-all duration-700 ease-out"
               style={{ width: `${metrics.replyProgress}%` }}
             />
           </div>
         </div>
-        <div className="rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-black/70">
-          Best day to send based on your data: <b>{metrics.bestSendDay}</b>
-        </div>
-        <div className="rounded-xl border border-black/10 bg-[#f7f7f7] px-4 py-3 text-sm text-black/70">
-          {focusCopy}
+        <div className="space-y-2 pt-2">
+          <div className="flex items-center gap-3 rounded-xl border border-black/5 bg-[#fafafa] px-4 py-3 text-xs text-black/60">
+            <Calendar className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Best day to send:{" "}
+              <b className="text-black">{metrics.bestSendDay}</b>
+            </span>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl border border-black/5 bg-black/2 px-4 py-3 text-xs leading-relaxed text-black/60">
+            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{focusCopy}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -254,34 +272,34 @@ export function DashboardStatCards({ userId }: { userId: string }) {
 
   if (applications === undefined) {
     return (
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, idx) => (
-          <article
+          <div
             key={idx}
-            className={`rounded-2xl border p-5 border-black/10 bg-[#fafafa] text-black`}
+            className="space-y-4 rounded-xl border border-black/5 bg-[#fafafa] p-5"
           >
-            <div className="h-5 w-5 animate-pulse rounded bg-black/20" />
-            <div className="mt-4 h-8 w-14 animate-pulse rounded bg-black/15" />
-            <div className="mt-2 h-3 w-28 animate-pulse rounded bg-black/15" />
-          </article>
+            <Skeleton className="h-5 w-5 rounded-md" />
+            <Skeleton className="h-8 w-12" />
+            <Skeleton className="h-3 w-24" />
+          </div>
         ))}
       </div>
     )
   }
 
-  const metrics = getDashboardMetrics(applications)
+  const metrics = getDashboardMetrics(applications as DashboardApplication[])
   const cards = [
     {
       icon: Send,
-      label: "Applications Sent",
+      label: "Sent",
       value: String(metrics.totalSent),
       helper: `${metrics.weekSent} this week`,
     },
     {
       icon: MessageSquareReply,
-      label: "Replies Received",
+      label: "Replies",
       value: String(metrics.replyCount),
-      helper: `${metrics.totalClicks} link clicks · ${metrics.totalOpens} opens`,
+      helper: `${metrics.totalClicks} clicks · ${metrics.totalOpens} opens`,
     },
     {
       icon: CalendarCheck,
@@ -291,31 +309,29 @@ export function DashboardStatCards({ userId }: { userId: string }) {
     },
     {
       icon: TrendingUp,
-      label: "Success Rate",
+      label: "Rate",
       value: `${metrics.successRate}%`,
       helper: "Replies over sends",
     },
   ]
 
   return (
-    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card, idx) => (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {cards.map((card) => (
         <article
           key={card.label}
-          className={`rounded-2xl border p-5 border-black/5 bg-[#fafafa] text-black shadow-sm`}
+          className="rounded-xl border border-black/5 bg-[#fafafa] p-5 text-black transition-colors hover:bg-black/1"
         >
-          <card.icon className="h-5 w-5" />
-          <p className="mt-4 text-3xl leading-none font-semibold text-black">
+          <div className="flex items-center justify-between">
+            <card.icon className="h-4 w-4 text-black/40" />
+            <span className="text-[10px] font-bold tracking-widest text-black/30 uppercase">
+              {card.label}
+            </span>
+          </div>
+          <p className="mt-4 text-3xl font-semibold tracking-tight text-black">
             {card.value}
           </p>
-          <p
-            className={`mt-2 text-xs font-semibold tracking-[0.1em] uppercase text-black/60`}
-          >
-            {card.label}
-          </p>
-          <p
-            className={`mt-2 text-xs text-black/50`}
-          >
+          <p className="mt-1 truncate text-[11px] font-medium text-black/40">
             {card.helper}
           </p>
         </article>
@@ -330,18 +346,17 @@ export function ApplicationsTable({ userId }: { userId: string }) {
 
   if (applications === undefined) {
     return (
-      <div className="space-y-3 p-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="flex animate-pulse items-center gap-4">
-            <div className="h-8 w-8 rounded-lg bg-gray-100" />
+      <div className="space-y-4 p-4">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4">
+            <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 w-32 rounded bg-gray-100" />
-              <div className="h-3 w-48 rounded bg-gray-50" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-48" />
             </div>
-            <div className="hidden h-3 w-24 rounded bg-gray-50 sm:block" />
-            <div className="h-6 w-16 rounded-full bg-gray-100" />
-            <div className="h-4 w-8 rounded bg-gray-50" />
-            <div className="hidden h-3 w-20 rounded bg-gray-50 sm:block" />
+            <Skeleton className="hidden h-3 w-24 sm:block" />
+            <Skeleton className="h-6 w-16 rounded-full" />
+            <Skeleton className="h-4 w-20" />
           </div>
         ))}
       </div>
@@ -350,23 +365,23 @@ export function ApplicationsTable({ userId }: { userId: string }) {
 
   if (applications.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-12">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white">
-          <Mail className="h-8 w-8 text-gray-300" />
+      <div className="flex flex-col items-center justify-center gap-6 py-16 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/5">
+          <Mail className="h-8 w-8 text-black/20" />
         </div>
-        <div className="text-center">
-          <p className="font-semibold text-primary">No applications yet</p>
-          <p className="mt-1 max-w-xs text-sm text-gray-500">
-            Paste a job description with a recruiter email and let the AI craft
-            a personalised cover letter for you.
+        <div>
+          <p className="font-semibold text-black">No applications yet</p>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-black/40">
+            Paste a job description and a recipient email to get started. AI
+            will draft a personalized cover letter for you.
           </p>
         </div>
         <Link
           href="/dashboard/new"
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white transition-all hover:-translate-y-0.5 active:scale-95"
+          className="inline-flex items-center gap-2 rounded-full bg-black px-6 py-2.5 text-xs font-bold tracking-widest text-white uppercase transition-colors hover:bg-black/90"
         >
           <Sparkles className="h-4 w-4" />
-          Send your first application
+          Start First App
         </Link>
       </div>
     )
@@ -375,20 +390,12 @@ export function ApplicationsTable({ userId }: { userId: string }) {
   return (
     <Table>
       <TableHeader>
-        <TableRow>
-          <TableHead>
-            Company
-          </TableHead>
-          <TableHead className="hidden sm:table-cell">
-            Recipient
-          </TableHead>
-          <TableHead>
-            Status
-          </TableHead>
-          <TableHead className="text-center">
-            Engagement
-          </TableHead>
-          <TableHead className="hidden sm:table-cell">
+        <TableRow className="border-b border-black/5 hover:bg-transparent">
+          <TableHead className="pl-5">Company</TableHead>
+          <TableHead className="hidden sm:table-cell">Recipient</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead className="text-center">Engagement</TableHead>
+          <TableHead className="hidden pr-5 text-right sm:table-cell">
             Sent
           </TableHead>
         </TableRow>
@@ -397,46 +404,48 @@ export function ApplicationsTable({ userId }: { userId: string }) {
         {applications.map((app) => (
           <TableRow
             key={app._id}
-            className="cursor-pointer hover:bg-white"
+            className="group cursor-pointer transition-colors hover:bg-black/2"
             onClick={() => router.push(`/dashboard/tracker/${app._id}`)}
           >
-            <TableCell>
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-50">
-                  <Building2 className="h-4 w-4 text-gray-400" />
+            <TableCell className="py-4 pl-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/5 text-black/40 transition-colors group-hover:bg-black/10 group-hover:text-black">
+                  <Building2 className="h-4.5 w-4.5" />
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-primary">
+                <div className="min-w-0">
+                  <p className="truncate text-sm leading-tight font-semibold text-black">
                     {app.company}
                   </p>
-                  <p className="text-[11px] text-gray-500">{app.role}</p>
+                  <p className="mt-1 truncate text-[11px] text-black/40">
+                    {app.role}
+                  </p>
                 </div>
               </div>
             </TableCell>
-            <TableCell className="hidden sm:table-cell">
-              <span className="flex items-center gap-1.5 text-gray-500">
-                <Mail className="h-3.5 w-3.5 text-gray-300" />
-                {app.recipientEmail}
+            <TableCell className="hidden py-4 sm:table-cell">
+              <span className="flex items-center gap-2 text-xs text-black/50">
+                <Mail className="h-3.5 w-3.5 shrink-0 opacity-40" />
+                <span className="max-w-[140px] truncate">
+                  {app.recipientEmail}
+                </span>
               </span>
             </TableCell>
-            <TableCell>
+            <TableCell className="py-4">
               <Badge
-                className={`${statusStyles[app.status] ?? "border-gray-200 bg-gray-50 text-gray-600"} border font-semibold`}
+                className={`${statusStyles[app.status] ?? "border-gray-200 bg-gray-50 text-gray-600"} h-5 border-0 px-2 py-0 text-[10px] font-bold tracking-tight uppercase shadow-none`}
               >
                 {app.status}
               </Badge>
             </TableCell>
-            <TableCell className="text-center">
-              <div className="inline-flex items-center gap-2">
+            <TableCell className="py-4 text-center">
+              <div className="inline-flex items-center gap-3">
                 {(app.clickCount ?? 0) > 0 ? (
                   <span
                     className="inline-flex items-center gap-1 text-emerald-600"
                     title="Link clicks"
                   >
                     <MousePointerClick className="h-3.5 w-3.5" />
-                    <span className="text-sm font-semibold">
-                      {app.clickCount}
-                    </span>
+                    <span className="text-xs font-bold">{app.clickCount}</span>
                   </span>
                 ) : null}
                 {(app.openCount ?? 0) > 0 ? (
@@ -445,25 +454,24 @@ export function ApplicationsTable({ userId }: { userId: string }) {
                     title="Email opens"
                   >
                     <Eye className="h-3.5 w-3.5" />
-                    <span className="text-sm font-semibold">
-                      {app.openCount}
-                    </span>
+                    <span className="text-xs font-bold">{app.openCount}</span>
                   </span>
                 ) : null}
                 {(app.clickCount ?? 0) === 0 && (app.openCount ?? 0) === 0 ? (
-                  <span className="text-gray-300">&mdash;</span>
+                  <span className="text-black/10 transition-colors group-hover:text-black/30">
+                    &mdash;
+                  </span>
                 ) : null}
               </div>
             </TableCell>
-            <TableCell className="hidden sm:table-cell">
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <Calendar className="h-3.5 w-3.5" />
+            <TableCell className="hidden py-4 pr-5 text-right sm:table-cell">
+              <span className="flex items-center justify-end gap-1.5 text-xs text-black/40">
+                <Calendar className="h-3 w-3 opacity-60" />
                 {new Date(app.emailSentAt ?? app.createdAt).toLocaleDateString(
                   "en-US",
                   {
                     month: "short",
                     day: "numeric",
-                    year: "numeric",
                   }
                 )}
               </span>
@@ -513,26 +521,27 @@ export function CheckInboxButton() {
 
   return (
     <div>
-      <button
+      <Button
         onClick={handleCheck}
         disabled={isChecking}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-black/15 bg-white px-4 py-3 text-sm font-bold text-primary transition-all hover:bg-white disabled:opacity-50"
+        variant="outline"
+        className="h-12 w-full rounded-full border-black/10 bg-white text-xs font-bold tracking-widest text-black uppercase transition-all hover:bg-black/5"
       >
         {isChecking ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Checking inbox...
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Checking...
           </>
         ) : (
           <>
-            <Inbox className="h-4 w-4" />
-            Check for Replies
+            <Inbox className="mr-2 h-4 w-4" />
+            Check Inbox
           </>
         )}
-      </button>
+      </Button>
       {result && (
         <p
-          className={`mt-2 text-center text-xs ${result.isError ? "text-red-500" : "text-gray-500"}`}
+          className={`mt-3 text-center text-[10px] font-bold tracking-tight uppercase ${result.isError ? "text-red-500" : "text-black/40"}`}
         >
           {result.message}
         </p>

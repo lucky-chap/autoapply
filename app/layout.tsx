@@ -53,9 +53,7 @@ export default async function RootLayout({
         <TooltipProvider>
           <Auth0Provider user={session?.user}>
             <ConvexClientProvider>
-              <ThemeProvider>
-                <main className="min-h-screen bg-white">{children}</main>
-              </ThemeProvider>
+              <main className="min-h-screen bg-white">{children}</main>
             </ConvexClientProvider>
           </Auth0Provider>
         </TooltipProvider>
