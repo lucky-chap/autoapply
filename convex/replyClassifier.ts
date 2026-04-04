@@ -5,6 +5,7 @@
  * using GLM into status categories (Replied, Interview, Offer, Rejected).
  */
 
+"use node"
 import { callGemini } from "./aiActions"
 
 // ── Base64url decode (Convex runtime has no Node Buffer) ──
@@ -124,8 +125,6 @@ export async function classifyReply(
   company: string,
   role: string
 ): Promise<ClassificationResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY!
-
   const classifyPrompt = `You are a highly precise email classifier for a job application agent.
 
 The candidate applied for the role of "${role}" at "${company}".
@@ -148,7 +147,7 @@ Return a JSON object with these EXACT fields:
 CRITICAL: Look very carefully for links and times. If there is a "Schedule an interview" button or link, extract it.
 Return ONLY the JSON object.`
 
-  const classificationRaw = await callGemini(classifyPrompt, apiKey)
+  const classificationRaw = await callGemini(classifyPrompt)
   console.log(`[replyClassifier] AI Raw Output for ${company}:`, classificationRaw)
 
   let status = ""

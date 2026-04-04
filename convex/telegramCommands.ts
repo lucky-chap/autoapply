@@ -32,14 +32,16 @@ export async function handleStart(
         botToken,
         chatId,
         "✅ <b>Account linked successfully!</b>\n\n" +
-          "You're all set. Use /job to paste a job description and start applying."
+          "You're all set. Use /job to paste a job description with a recruiter email and start applying."
       )
       return
     } else {
       await sendMessage(
         botToken,
         chatId,
-        "❌ <b>Linking failed:</b> " + escapeHtml(result.error ?? "Unknown error") + "\n\n" +
+        "❌ <b>Linking failed:</b> " +
+          escapeHtml(result.error ?? "Unknown error") +
+          "\n\n" +
           "The link may have expired. Please generate a new one from the dashboard."
       )
       return
@@ -122,7 +124,7 @@ export async function handleLink(
     botToken,
     chatId,
     "🔗 <b>Link your AutoApply account</b>\n\n" +
-      `Open this link while logged in to AutoApply:\n${linkUrl}\n\n` +
+      `Open this link while logged in to AutoApply:\n<a href="${linkUrl}">Link your account</a>\n\n` +
       "<i>This link expires in 15 minutes.</i>"
   )
 }
@@ -167,10 +169,9 @@ export async function handleSalary(
 ) {
   const arg = text.replace("/salary", "").trim()
   if (!arg) {
-    const prefs = await ctx.runQuery(
-      internal.preferences.getByUserInternal,
-      { userId }
-    )
+    const prefs = await ctx.runQuery(internal.preferences.getByUserInternal, {
+      userId,
+    })
     if (prefs?.minSalary) {
       await sendMessage(
         botToken,
@@ -190,10 +191,9 @@ export async function handleSalary(
   }
 
   if (arg.toLowerCase() === "off" || arg === "0") {
-    const prefs = await ctx.runQuery(
-      internal.preferences.getByUserInternal,
-      { userId }
-    )
+    const prefs = await ctx.runQuery(internal.preferences.getByUserInternal, {
+      userId,
+    })
     if (prefs) {
       await ctx.runMutation(internal.preferences.internalUpdateMinSalary, {
         userId,
@@ -306,12 +306,11 @@ export async function handleStatus(
     `${check(diag.hasGmailToken)} Gmail connected`,
   ]
 
-  const matchInfo = diag.recentMatchCount > 0
-    ? `${diag.recentMatchCount} match(es) in last 24h`
-    : "No matches in last 24h"
-  healthLines.push(
-    `${check(diag.recentMatchCount > 0)} ${matchInfo}`
-  )
+  const matchInfo =
+    diag.recentMatchCount > 0
+      ? `${diag.recentMatchCount} match(es) in last 24h`
+      : "No matches in last 24h"
+  healthLines.push(`${check(diag.recentMatchCount > 0)} ${matchInfo}`)
 
   if (diag.failedActionCount > 0) {
     healthLines.push(
@@ -373,7 +372,7 @@ export async function handleStatus(
     msg += "\n\nNo applications sent yet."
   }
 
-  msg += `\n\nView all on the dashboard:\n${siteUrl}/dashboard`
+  msg += `\n\n<a href="${siteUrl}/dashboard">View all on the dashboard</a>`
 
   await sendMessage(botToken, chatId, msg)
 }
@@ -404,9 +403,15 @@ export async function handleLinks(
       return
     }
     const lines = [
-      profile.githubUrl ? `GitHub: ${profile.githubUrl}` : "GitHub: <i>not set</i>",
-      profile.linkedinUrl ? `LinkedIn: ${profile.linkedinUrl}` : "LinkedIn: <i>not set</i>",
-      profile.portfolioUrl ? `Portfolio: ${profile.portfolioUrl}` : "Portfolio: <i>not set</i>",
+      profile.githubUrl
+        ? `GitHub: ${profile.githubUrl}`
+        : "GitHub: <i>not set</i>",
+      profile.linkedinUrl
+        ? `LinkedIn: ${profile.linkedinUrl}`
+        : "LinkedIn: <i>not set</i>",
+      profile.portfolioUrl
+        ? `Portfolio: ${profile.portfolioUrl}`
+        : "Portfolio: <i>not set</i>",
     ]
     await sendMessage(
       botToken,
@@ -425,11 +430,12 @@ export async function handleLinks(
   const field = parts[0]?.toLowerCase()
   const value = parts[1]?.trim()
 
-  const fieldMap: Record<string, "githubUrl" | "linkedinUrl" | "portfolioUrl"> = {
-    github: "githubUrl",
-    linkedin: "linkedinUrl",
-    portfolio: "portfolioUrl",
-  }
+  const fieldMap: Record<string, "githubUrl" | "linkedinUrl" | "portfolioUrl"> =
+    {
+      github: "githubUrl",
+      linkedin: "linkedinUrl",
+      portfolio: "portfolioUrl",
+    }
 
   if (field === "clear" && parts[1]) {
     const clearField = parts[1].toLowerCase()

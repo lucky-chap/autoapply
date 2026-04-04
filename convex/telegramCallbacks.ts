@@ -15,6 +15,7 @@ import {
   sendMessage,
   editMessageReplyMarkup,
   answerCallbackQuery,
+  buildApprovalButtons,
 } from "./telegramHelpers"
 
 interface CallbackQuery {
@@ -261,7 +262,7 @@ async function handleCalCheck(
         botToken, chatId,
         `🔒 <b>Calendar access not enabled</b>\n\n` +
           `To use calendar features, you need to grant Google Calendar permission.\n\n` +
-          `Visit your permissions page to connect it:\n${permissionsUrl}`
+          `<a href="${permissionsUrl}">Visit your permissions page to connect it</a>`
       )
     } else {
       await sendMessage(botToken, chatId, `❌ <b>Failed to check calendar</b>\n\n${escapeHtml(String(err))}`)
@@ -355,11 +356,12 @@ async function handleCalReply(
     })
 
     const preview = emailBody.length > 500 ? emailBody.slice(0, 500) + "..." : emailBody
-    const replyButtons: { text: string; callback_data: string }[][] = [
-      [
-        { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-        { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-      ],
+
+    const siteUrl =
+      process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
+    const replyButtons: { text: string; url?: string; callback_data?: string }[][] = [
+      buildApprovalButtons(siteUrl, pendingActionId as string),
     ]
     if (hasResume) {
       replyButtons.push([
@@ -515,11 +517,11 @@ async function handleCalEvent(
       attachResume: hasResume,
     })
 
-    const replyButtons: { text: string; callback_data: string }[][] = [
-      [
-        { text: "✅ Send to Recruiter", callback_data: `approve:${pendingActionId}` },
-        { text: "❌ Skip", callback_data: `reject:${pendingActionId}` },
-      ],
+    const calSiteUrl =
+      process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
+    const replyButtons: { text: string; url?: string; callback_data?: string }[][] = [
+      buildApprovalButtons(calSiteUrl, pendingActionId as string, { approveLabel: "✅ Send to Recruiter" }),
     ]
     if (hasResume) {
       replyButtons.push([
@@ -555,7 +557,7 @@ async function handleCalEvent(
         "/permissions"
       await sendMessage(
         botToken, chatId,
-        `🔒 <b>Calendar access not enabled</b>\n\nVisit your permissions page to connect it:\n${permissionsUrl}`
+        `🔒 <b>Calendar access not enabled</b>\n\n<a href="${permissionsUrl}">Visit your permissions page to connect it</a>`
       )
     } else {
       await sendMessage(botToken, chatId, `❌ <b>Failed to create event</b>\n\n${escapeHtml(String(err))}`)
@@ -587,15 +589,15 @@ async function handleToggleResume(
     )
 
     if (callbackQuery.message?.message_id) {
+      const toggleSiteUrl =
+        process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
       await sendTelegram(botToken, "editMessageReplyMarkup", {
         chat_id: chatId,
         message_id: callbackQuery.message.message_id,
         reply_markup: {
           inline_keyboard: [
-            [
-              { text: "✅ Approve & Send", callback_data: `approve:${actionId}` },
-              { text: "❌ Reject", callback_data: `reject:${actionId}` },
-            ],
+            buildApprovalButtons(toggleSiteUrl, actionId as string),
             [
               { text: label, callback_data: `toggle_resume:${actionId}` },
             ],
@@ -666,7 +668,7 @@ async function handleJobApply(
       await sendMessage(
         botToken, chatId,
         `⚠️ <b>No recruiter email found</b> for ${escapeHtml(job.title)} at ${escapeHtml(job.company)}.\n\n` +
-          `You can apply directly via the listing:\n${escapeHtml(job.url)}`
+          `<a href="${escapeHtml(job.url)}">Apply directly via the listing</a>`
       )
       
       // Load next job into the original message layout
@@ -731,11 +733,11 @@ async function handleJobApply(
       : coverLetter
     const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
 
-    const buttons: { text: string; callback_data: string }[][] = [
-      [
-        { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-        { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-      ],
+    const jobSiteUrl =
+      process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
+    const buttons: { text: string; url?: string; callback_data?: string }[][] = [
+      buildApprovalButtons(jobSiteUrl, pendingActionId as string),
     ]
     if (hasResume) {
       buttons.push([

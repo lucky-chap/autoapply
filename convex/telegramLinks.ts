@@ -423,6 +423,55 @@ export const consumeLinkingToken = internalMutation({
   },
 })
 
+// ── Approval tokens (step-up auth for email sending via Telegram) ──
+
+export const createApprovalToken = internalMutation({
+  args: { pendingActionId: v.id("pendingActions") },
+  handler: async (ctx, { pendingActionId }) => {
+    // Delete any existing tokens for this pending action
+    const existing = await ctx.db
+      .query("approvalTokens")
+      .withIndex("by_pendingActionId", (q) =>
+        q.eq("pendingActionId", pendingActionId)
+      )
+      .take(10)
+    for (const doc of existing) {
+      await ctx.db.delete(doc._id)
+    }
+
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map((b) => b.toString(36).padStart(2, "0"))
+      .join("")
+      .slice(0, 32)
+
+    await ctx.db.insert("approvalTokens", {
+      pendingActionId,
+      token,
+      expiresAt: Date.now() + 30 * 60 * 1000, // 30 minutes
+    })
+    return token
+  },
+})
+
+export const consumeApprovalToken = internalMutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const record = await ctx.db
+      .query("approvalTokens")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first()
+
+    if (!record || record.expiresAt < Date.now()) {
+      if (record) await ctx.db.delete(record._id)
+      return { success: false as const, error: "Invalid or expired approval link" }
+    }
+
+    const pendingActionId = record.pendingActionId
+    await ctx.db.delete(record._id)
+    return { success: true as const, pendingActionId }
+  },
+})
+
 export const cleanup = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -441,6 +490,15 @@ export const cleanup = internalMutation({
       .filter((q) => q.lt(q.field("expiresAt"), now))
       .take(100)
     for (const doc of expiredTokens) {
+      await ctx.db.delete(doc._id)
+    }
+
+    // Clean up expired approval tokens
+    const expiredApprovalTokens = await ctx.db
+      .query("approvalTokens")
+      .filter((q) => q.lt(q.field("expiresAt"), now))
+      .take(100)
+    for (const doc of expiredApprovalTokens) {
       await ctx.db.delete(doc._id)
     }
 

@@ -1,10 +1,11 @@
+"use node"
 import { internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 import { callGemini } from "./aiActions"
 import { getAuth0ManagementToken, getUserEmail } from "./auth0"
 import { formatFollowUpSent } from "./openclaw"
-import { escapeHtml, sendMessage } from "./telegramHelpers"
+import { escapeHtml, sendMessage, buildApprovalButtons } from "./telegramHelpers"
 
 // ── Follow-up email generation ──
 
@@ -13,7 +14,6 @@ async function generateFollowUp(
   role: string,
   candidateName: string,
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY!
   return await callGemini(
     `Write a brief, polite follow-up email for a job application.
 
@@ -27,7 +27,6 @@ Requirements:
 5. End with "Best regards," followed by ONLY the candidate's name "${candidateName}"
 
 IMPORTANT: Return ONLY plain text. No markdown formatting.`,
-    apiKey,
   )
 }
 
@@ -138,6 +137,9 @@ export const checkAndSendFollowUps = internalAction({
 
           const botToken = process.env.TELEGRAM_BOT_TOKEN!
 
+          const followUpSiteUrl =
+            process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
           const result = (await sendMessage(
             botToken,
             telegramLink.telegramChatId,
@@ -146,10 +148,7 @@ export const checkAndSendFollowUps = internalAction({
               `<b>Follow-up preview:</b>\n${escapeHtml(preview)}`,
             {
               inline_keyboard: [
-                [
-                  { text: "✅ Send Follow-up", callback_data: `approve:${pendingActionId}` },
-                  { text: "❌ Skip", callback_data: `reject:${pendingActionId}` },
-                ],
+                buildApprovalButtons(followUpSiteUrl, pendingActionId as string, { approveLabel: "✅ Send Follow-up" }),
               ],
             }
           )) as { result?: { message_id?: number } }

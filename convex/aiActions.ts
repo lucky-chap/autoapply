@@ -1,60 +1,16 @@
-"use node";
+"use node"
 import { internalAction, ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
 import { z } from "zod"
-import { GoogleGenAI, Type } from "@google/genai"
+import { callVertex } from "../lib/vertex"
 
-
-/**
- * Helper to call Gemini API (generativelanguage.googleapis.com)
- */
-async function callAI(
-  prompt: string,
-  apiKey: string,
-  maxTokens = 4000,
-  jsonMode = false,
-  responseSchema?: any
-): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey })
-  
-  const config: any = {
-    maxOutputTokens: maxTokens,
-    temperature: 0.1,
-  }
-
-  if (jsonMode) {
-    config.responseMimeType = "application/json"
-    if (responseSchema) {
-      config.responseSchema = responseSchema
-    }
-  }
-
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config,
-  })
-
-  const content = response.text
-
-  if (!content) {
-    throw new Error(`Gemini returned empty content`)
-  }
-
-  return content
-}
-
-
-/**
- * Public wrapper for callAI (matches previous API)
- */
 export async function callGemini(
   prompt: string,
-  apiKey: string,
+  _apiKey?: string,
   maxTokens = 4000
 ): Promise<string> {
-  return callAI(prompt, process.env.GEMINI_API_KEY!, maxTokens);
+  return await callVertex(prompt, maxTokens)
 }
 
 export async function extractJobInfoHelper(jobDescription: string): Promise<{
@@ -64,39 +20,46 @@ export async function extractJobInfoHelper(jobDescription: string): Promise<{
   salary: number | null
   multipleDetected: boolean
 }> {
-  const apiKey = process.env.GEMINI_API_KEY!
-
   const prompt = `You are extracting structured information from a job posting.
 
 JOB POSTING:
-${jobDescription.slice(0, 4000)}`;
+${jobDescription.slice(0, 4000)}
 
-  const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-      company: { type: Type.STRING },
-      role: { type: Type.STRING },
-      email: { type: Type.STRING },
-      salary: { type: Type.INTEGER, nullable: true },
-      multipleJobs: { type: Type.BOOLEAN },
-    },
-  }
+Extract the following fields from the job posting:
+- "company": the company name
+- "role": the job title / role name
+- "email": a contact or application email address (if present)
+- "salary": integer salary (if present, otherwise null)
+- "multipleJobs": boolean (true if the posting is for multiple distinct roles/locations)
+
+Return ONLY a valid JSON object matching this structure:
+{"company": "String", "role": "String", "email": "String", "salary": null, "multipleJobs": false}
+
+Return ONLY the JSON object, NO markdown formatting, NO explanations.`
 
   try {
-    const responseText = await callAI(prompt, apiKey, 2000, true, responseSchema);
-    
+    const responseText = await callVertex(prompt, 2000)
+
     // Clean and parse
     const cleanJson = responseText
-      .replace(/^```json\s*\n?/, "")
-      .replace(/```\s*$/, "")
-      .trim();
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```\s*$/, "")
+      .trim()
 
-    let raw: any;
+    const jsonMatch = cleanJson.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error("No JSON found in response")
+    }
+
+    let raw: any
     try {
-      raw = JSON.parse(cleanJson);
+      raw = JSON.parse(jsonMatch[0])
     } catch (err) {
-      console.error("Gemini Extraction Parse Error. Raw response:", responseText);
-      throw err;
+      console.error(
+        "Gemini Extraction Parse Error. Raw response:",
+        responseText
+      )
+      throw err
     }
 
     // Validate with Zod
@@ -106,15 +69,18 @@ ${jobDescription.slice(0, 4000)}`;
       email: z.string().default(""),
       salary: z.number().nullable().default(null),
       multipleJobs: z.boolean().default(false),
-    });
+    })
 
-    const validation = schema.safeParse(raw);
+    const validation = schema.safeParse(raw)
     if (!validation.success) {
-       console.error("Gemination Extraction Schema Error:", validation.error.format());
-       throw new Error("Invalid extraction format from AI");
+      console.error(
+        "Gemination Extraction Schema Error:",
+        validation.error.format()
+      )
+      throw new Error("Invalid extraction format from AI")
     }
 
-    const data = validation.data;
+    const data = validation.data
 
     return {
       company: data.company,
@@ -122,17 +88,16 @@ ${jobDescription.slice(0, 4000)}`;
       email: data.email,
       salary: data.salary,
       multipleDetected: data.multipleJobs,
-    };
+    }
   } catch (err) {
-
-    console.error("Gemini Extraction Error:", err);
+    console.error("Gemini Extraction Error:", err)
     return {
       company: "",
       role: "",
       email: "",
       salary: null,
       multipleDetected: false,
-    };
+    }
   }
 }
 
@@ -143,8 +108,6 @@ export async function generateCoverLetterHelper(
   role: string,
   userId: string
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY!
-
   const profile = await ctx.runQuery(
     internal.resumeProfiles.getByUserInternal,
     {
@@ -216,7 +179,7 @@ CRITICAL: The letter MUST end immediately after the candidate's name "${candidat
 
 IMPORTANT: Return ONLY plain text. Do NOT use any markdown formatting — no bold (**), no italics (*), no headers (#), no bullet points. Just normal sentences and paragraphs separated by blank lines.`
 
-  const raw = await callAI(prompt, apiKey, 2000)
+  const raw = await callVertex(prompt, 2000)
 
   // Trim anything after the candidate's name in the sign-off
   const nameIndex = raw.lastIndexOf(candidateName)

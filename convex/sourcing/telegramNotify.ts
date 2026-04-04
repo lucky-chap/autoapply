@@ -219,12 +219,6 @@ async function handleAutoApply(
   chatId: string,
   matches: MatchWithJob[]
 ) {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.error("GEMINI_API_KEY not set, cannot auto-apply")
-    return
-  }
-
   for (const match of matches) {
     try {
       const email = match.job.email

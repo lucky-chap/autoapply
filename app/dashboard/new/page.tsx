@@ -287,21 +287,21 @@ function NewApplicationContent() {
     (recipientEmail.trim() ? 1 : 0)
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_0%_0%,#ecf6d8_0%,#f4f2ed_40%,#efede7_100%)]">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <Link
               href="/dashboard"
-              className="group mb-3 inline-flex items-center gap-2 text-sm font-semibold text-black/55 transition-colors hover:text-black"
+              className="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-black/50 transition-colors hover:text-black"
             >
               <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
               Back to Dashboard
             </Link>
-            <h1 className="font-display text-4xl leading-tight font-semibold text-black sm:text-5xl">
+            <h1 className="font-display text-4xl font-semibold tracking-tight text-black sm:text-5xl md:leading-[1.1]">
               Create Application
             </h1>
-            <p className="mt-2 text-sm text-black/65 sm:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60 sm:text-base">
               Build, review, and send a tailored job application from one flow.
             </p>
           </div>
@@ -320,10 +320,10 @@ function NewApplicationContent() {
                   key={s}
                   className={`flex items-center gap-3 rounded-2xl border px-3 py-3 transition-colors ${
                     active
-                      ? "border-black/25 bg-[#b8ff66]/45"
+                      ? "border-black/20 bg-black/5"
                       : complete
-                        ? "border-emerald-200 bg-emerald-50"
-                        : "border-black/10 bg-white"
+                        ? "border-black/10 bg-white"
+                        : "border-black/5 bg-white"
                   }`}
                 >
                   <div
@@ -331,14 +331,14 @@ function NewApplicationContent() {
                       active
                         ? "bg-black text-white"
                         : complete
-                          ? "bg-emerald-600 text-white"
-                          : "bg-black/10 text-black/55"
+                          ? "bg-black text-white"
+                          : "bg-black/5 text-black/40"
                     }`}
                   >
                     {complete ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
                   </div>
                   <div>
-                    <p className="text-[11px] tracking-[0.08em] text-black/50 uppercase">
+                    <p className="text-[11px] tracking-widest text-black/50 uppercase">
                       Step {i + 1}
                     </p>
                     <p className="text-sm font-semibold text-black">
@@ -389,10 +389,9 @@ function NewApplicationContent() {
           <div className="space-y-6">
             {step === "input" && (
               <>
-                <article className="relative overflow-hidden rounded-3xl border border-black/12 bg-white shadow-[0_20px_50px_-36px_rgba(0,0,0,0.5)]">
-                  <div className="pointer-events-none absolute top-0 right-0 h-36 w-36 rounded-full bg-[#b8ff66]/50 blur-2xl" />
+                <article className="relative overflow-hidden rounded-2xl border border-black/10 bg-white">
                   <div className="relative border-b border-black/10 p-6">
-                    <p className="text-xs font-semibold tracking-[0.1em] text-black/50 uppercase">
+                    <p className="text-xs font-semibold tracking-widest text-black/50 uppercase">
                       Input
                     </p>
                     <h2 className="mt-2 font-display text-2xl font-semibold text-black">
@@ -475,9 +474,9 @@ function NewApplicationContent() {
                 </article>
 
                 {isGenerating ? (
-                  <div className="space-y-4 rounded-3xl border border-black/10 bg-white p-6">
+                  <div className="space-y-4 rounded-2xl border border-black/10 bg-white p-6">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#b8ff66]/45">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/5">
                         <Sparkles className="h-5 w-5 animate-pulse text-black" />
                       </div>
                       <div>
@@ -485,7 +484,8 @@ function NewApplicationContent() {
                           Generating your cover letter...
                         </p>
                         <p className="text-xs text-black/50">
-                          Tailoring this application to the role and your profile
+                          Tailoring this application to the role and your
+                          profile
                         </p>
                       </div>
                     </div>
@@ -501,7 +501,7 @@ function NewApplicationContent() {
                   <button
                     onClick={handleGenerate}
                     disabled={!hasProfile || isExtracting}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#141414] px-6 py-4 text-sm font-bold text-white shadow-[0_16px_24px_-18px_rgba(0,0,0,0.8)] transition-all hover:-translate-y-0.5 active:scale-[0.995] disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-6 py-4 text-sm font-bold text-white transition-all hover:bg-black/90 disabled:opacity-50"
                   >
                     <Sparkles className="h-5 w-5" />
                     Generate Cover Letter with AI
@@ -512,10 +512,10 @@ function NewApplicationContent() {
 
             {step === "preview" && (
               <>
-                <article className="rounded-3xl border border-black/10 bg-white shadow-[0_20px_50px_-36px_rgba(0,0,0,0.5)]">
+                <article className="rounded-2xl border border-black/10 bg-white">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 p-6">
                     <div>
-                      <p className="text-xs font-semibold tracking-[0.1em] text-black/50 uppercase">
+                      <p className="text-xs font-semibold tracking-widest text-black/50 uppercase">
                         Draft
                       </p>
                       <h2 className="mt-1 font-display text-2xl font-semibold text-black">
@@ -581,7 +581,7 @@ function NewApplicationContent() {
                   <button
                     onClick={handleSend}
                     disabled={isSending || !recipientEmail.trim()}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#141414] px-6 py-3 text-sm font-bold text-white shadow-[0_16px_24px_-18px_rgba(0,0,0,0.8)] transition-all hover:-translate-y-0.5 active:scale-[0.995] disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-6 py-3 text-sm font-bold text-white transition-all hover:bg-black/90 disabled:opacity-50"
                   >
                     {isSending ? (
                       <>
@@ -600,11 +600,10 @@ function NewApplicationContent() {
             )}
 
             {step === "sent" && (
-              <article className="relative overflow-hidden rounded-3xl border border-black/10 bg-white p-10 text-center shadow-[0_20px_50px_-36px_rgba(0,0,0,0.5)]">
-                <div className="pointer-events-none absolute -top-12 left-1/2 h-32 w-32 -translate-x-1/2 rounded-full bg-[#b8ff66]/60 blur-2xl" />
+              <article className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-10 text-center">
                 <div className="relative">
-                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
-                    <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-black/5">
+                    <CheckCircle2 className="h-10 w-10 text-black" />
                   </div>
                   <h2 className="mb-2 font-display text-3xl font-semibold text-black">
                     Application sent
@@ -639,7 +638,7 @@ function NewApplicationContent() {
                           ? `/dashboard/tracker/${applicationId}`
                           : "/dashboard"
                       }
-                      className="rounded-2xl bg-[#141414] px-6 py-3 text-sm font-bold text-white transition-all hover:-translate-y-0.5"
+                      className="rounded-xl bg-black px-6 py-3 text-sm font-bold text-white transition-all hover:bg-black/90"
                     >
                       View Tracker
                     </Link>
@@ -650,8 +649,8 @@ function NewApplicationContent() {
           </div>
 
           <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-            <article className="rounded-3xl border border-black/12 bg-white p-5">
-              <p className="text-xs font-semibold tracking-[0.1em] text-black/50 uppercase">
+            <article className="rounded-2xl border border-black/10 bg-white p-5">
+              <p className="text-xs font-semibold tracking-widest text-black/50 uppercase">
                 Workflow
               </p>
               <div className="mt-3 space-y-2">
@@ -663,10 +662,10 @@ function NewApplicationContent() {
                       key={s}
                       className={`flex items-center gap-3 rounded-xl px-3 py-2 ${
                         active
-                          ? "bg-[#b8ff66]/45"
+                          ? "bg-black/5"
                           : complete
-                            ? "bg-emerald-50"
-                            : "bg-[#f7f7f4]"
+                            ? "bg-black/5"
+                            : "bg-white"
                       }`}
                     >
                       <div
@@ -674,8 +673,8 @@ function NewApplicationContent() {
                           active
                             ? "bg-black text-white"
                             : complete
-                              ? "bg-emerald-600 text-white"
-                              : "bg-black/10 text-black/55"
+                              ? "bg-black text-white"
+                              : "bg-black/5 text-black/40"
                         }`}
                       >
                         {complete ? "✓" : i + 1}
@@ -693,29 +692,29 @@ function NewApplicationContent() {
               </div>
             </article>
 
-            <article className="rounded-3xl border border-black/12 bg-white p-5">
-              <p className="text-xs font-semibold tracking-[0.1em] text-black/50 uppercase">
+            <article className="rounded-2xl border border-black/10 bg-white p-5">
+              <p className="text-xs font-semibold tracking-widest text-black/50 uppercase">
                 Draft Health
               </p>
               <div className="mt-3 space-y-3">
-                <div className="rounded-xl bg-[#f7f7f4] px-3 py-2">
-                  <p className="text-[11px] font-semibold tracking-[0.08em] text-black/45 uppercase">
+                <div className="rounded-xl bg-black/5 px-3 py-2">
+                  <p className="text-[11px] font-semibold tracking-widest text-black/45 uppercase">
                     Readiness
                   </p>
                   <p className="mt-1 text-lg font-semibold text-black">
                     {readinessScore} / 4 fields ready
                   </p>
                 </div>
-                <div className="rounded-xl bg-[#f7f7f4] px-3 py-2">
-                  <p className="text-[11px] font-semibold tracking-[0.08em] text-black/45 uppercase">
+                <div className="rounded-xl bg-black/5 px-3 py-2">
+                  <p className="text-[11px] font-semibold tracking-widest text-black/45 uppercase">
                     Job Description
                   </p>
                   <p className="mt-1 text-sm font-medium text-black/75">
                     {jobDescriptionWords} words pasted
                   </p>
                 </div>
-                <div className="rounded-xl bg-[#f7f7f4] px-3 py-2">
-                  <p className="text-[11px] font-semibold tracking-[0.08em] text-black/45 uppercase">
+                <div className="rounded-xl bg-black/5 px-3 py-2">
+                  <p className="text-[11px] font-semibold tracking-widest text-black/45 uppercase">
                     Cover Letter
                   </p>
                   <p className="mt-1 text-sm font-medium text-black/75">
@@ -725,12 +724,12 @@ function NewApplicationContent() {
               </div>
             </article>
 
-            <article className="rounded-3xl border border-black/12 bg-[#151515] p-5 text-white">
-              <p className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-[0.1em] text-white/70 uppercase">
-                <Sparkles className="h-3.5 w-3.5 text-[#b8ff66]" />
+            <article className="rounded-2xl border border-black/10 bg-black/5 p-5 text-black">
+              <p className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-widest text-black/50 uppercase">
+                <Sparkles className="h-3.5 w-3.5 text-black/80" />
                 Quality Tip
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-white/75">
+              <p className="mt-2 text-sm leading-relaxed text-black/70">
                 Cite two exact requirements from the posting in your first
                 paragraph, then tie each to one concrete proof point.
               </p>

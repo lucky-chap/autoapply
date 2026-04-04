@@ -11,7 +11,8 @@
  *   telegramJobFlow.ts   — job description processing & application creation
  */
 
-import { internalAction } from "./_generated/server"
+"use node"
+import { internalAction, internalMutation } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
 import { Id } from "./_generated/dataModel"
@@ -21,6 +22,7 @@ import { formatApplicationSent } from "./openclaw"
 import {
   escapeHtml,
   sendMessage,
+  editMessageReplyMarkup,
   encodeEmail,
   Attachment,
 } from "./telegramHelpers"
@@ -81,7 +83,9 @@ export const processUpdate = internalAction({
     // ── Route commands ──
 
     if (text === "/start" || text.startsWith("/start ")) {
-      const deepLinkToken = text.startsWith("/start ") ? text.slice(7).trim() : undefined
+      const deepLinkToken = text.startsWith("/start ")
+        ? text.slice(7).trim()
+        : undefined
       await handleStart(ctx, botToken, chatId, siteUrl, deepLinkToken)
       return
     }
@@ -102,7 +106,11 @@ export const processUpdate = internalAction({
         { telegramChatId: chatId }
       )
       if (!link) {
-        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Account not linked. Use /link first."
+        )
         return
       }
       await handleSalary(ctx, botToken, chatId, text, link.userId)
@@ -115,7 +123,11 @@ export const processUpdate = internalAction({
         { telegramChatId: chatId }
       )
       if (!link) {
-        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Account not linked. Use /link first."
+        )
         return
       }
       await handleAuto(ctx, botToken, chatId, link.userId)
@@ -137,7 +149,11 @@ export const processUpdate = internalAction({
         { telegramChatId: chatId }
       )
       if (!link) {
-        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Account not linked. Use /link first."
+        )
         return
       }
       await handleStatus(ctx, botToken, chatId, link.userId, siteUrl)
@@ -150,7 +166,11 @@ export const processUpdate = internalAction({
         { telegramChatId: chatId }
       )
       if (!link) {
-        await sendMessage(botToken, chatId, "⚠️ Account not linked. Use /link first.")
+        await sendMessage(
+          botToken,
+          chatId,
+          "⚠️ Account not linked. Use /link first."
+        )
         return
       }
       await handleLinks(ctx, botToken, chatId, text, link.userId)
@@ -164,7 +184,8 @@ export const processUpdate = internalAction({
       )
       if (!link) {
         await sendMessage(
-          botToken, chatId,
+          botToken,
+          chatId,
           "⚠️ Your Telegram account is not linked yet.\n\nUse /link to connect your AutoApply account first."
         )
         return
@@ -181,7 +202,8 @@ export const processUpdate = internalAction({
     )
     if (!link) {
       await sendMessage(
-        botToken, chatId,
+        botToken,
+        chatId,
         "⚠️ Your Telegram account is not linked yet.\n\nUse /link to connect your AutoApply account first."
       )
       return
@@ -198,11 +220,20 @@ export const processUpdate = internalAction({
         await ctx.runMutation(internal.telegramLinks.deletePendingEmailInput, {
           telegramChatId: chatId,
         })
-        await sendMessage(botToken, chatId, "⏳ Generating your cover letter...")
+        await sendMessage(
+          botToken,
+          chatId,
+          "⏳ Generating your cover letter..."
+        )
         await continueWithApplication(
-          ctx, botToken, chatId, link.userId,
-          pendingInput.jobDescription, pendingInput.company,
-          pendingInput.role, emailMatch[0]
+          ctx,
+          botToken,
+          chatId,
+          link.userId,
+          pendingInput.jobDescription,
+          pendingInput.company,
+          pendingInput.role,
+          emailMatch[0]
         )
         return
       } else {
@@ -237,9 +268,10 @@ export const processUpdate = internalAction({
 
     // No active mode — show help
     await sendMessage(
-      botToken, chatId,
+      botToken,
+      chatId,
       "💡 Use a command to get started:\n\n" +
-        "/job — Paste a job description\n" +
+        "/job — Paste a job description with a recruiter email\n" +
         "/status — Check recent applications\n" +
         "/salary — Set minimum salary alert\n" +
         "/auto — Toggle auto mode\n" +
@@ -295,7 +327,10 @@ export const executeApprovedAction = internalAction({
       id: pendingActionId,
     })
     if (!action || action.status !== "approved") {
-      console.error("[telegram] Action not found or not approved:", pendingActionId)
+      console.error(
+        "[telegram] Action not found or not approved:",
+        pendingActionId
+      )
       return
     }
 
@@ -325,7 +360,9 @@ export const executeApprovedAction = internalAction({
             coverLetter: action.payload.coverLetter,
             recipientEmail: action.payload.to,
             source: "telegram" as const,
-            ...(action.jobListingId ? { jobListingId: action.jobListingId } : {}),
+            ...(action.jobListingId
+              ? { jobListingId: action.jobListingId }
+              : {}),
           }
         )
       }
@@ -348,7 +385,8 @@ export const executeApprovedAction = internalAction({
             const fileRes = await fetch(fileUrl)
             if (fileRes.ok) {
               const arrayBuf = await fileRes.arrayBuffer()
-              const contentType = fileRes.headers.get("content-type") || "application/pdf"
+              const contentType =
+                fileRes.headers.get("content-type") || "application/pdf"
               const ext = contentType.includes("pdf") ? "pdf" : "docx"
               const name = senderInfo
                 ? `${senderInfo.name.replace(/\s+/g, "_")}_Resume.${ext}`
@@ -373,7 +411,9 @@ export const executeApprovedAction = internalAction({
         attachments: attachments.length > 0 ? attachments : undefined,
       })
 
-      const gmailBody: { raw: string; threadId?: string } = { raw: encodedEmail }
+      const gmailBody: { raw: string; threadId?: string } = {
+        raw: encodedEmail,
+      }
       if (gmailThreadId) gmailBody.threadId = gmailThreadId
 
       const gmailRes = await fetch(
@@ -428,7 +468,10 @@ export const executeApprovedAction = internalAction({
       // Notify via OpenClaw
       await ctx.runAction(internal.openclaw.sendNotification, {
         userId: action.userId,
-        message: formatApplicationSent(action.payload.company, action.payload.role),
+        message: formatApplicationSent(
+          action.payload.company,
+          action.payload.role
+        ),
       })
     } catch (err) {
       await ctx.runMutation(internal.pendingActions.updateStatus, {
@@ -439,7 +482,8 @@ export const executeApprovedAction = internalAction({
 
       if (action.telegramChatId) {
         const siteUrl = process.env.APP_BASE_URL || "the web app"
-        const isTokenError = err instanceof TokenVaultError && err.isReauthRequired
+        const isTokenError =
+          err instanceof TokenVaultError && err.isReauthRequired
 
         if (isTokenError) {
           await sendMessage(
@@ -451,7 +495,12 @@ export const executeApprovedAction = internalAction({
               `After logging in, your token will sync automatically. Then retry here.`,
             {
               inline_keyboard: [
-                [{ text: "🔄 Retry", callback_data: `retry:${pendingActionId}` }],
+                [
+                  {
+                    text: "🔄 Retry",
+                    callback_data: `retry:${pendingActionId}`,
+                  },
+                ],
               ],
             }
           )
@@ -464,7 +513,12 @@ export const executeApprovedAction = internalAction({
               `Error: ${escapeHtml(String(err))}`,
             {
               inline_keyboard: [
-                [{ text: "🔄 Retry", callback_data: `retry:${pendingActionId}` }],
+                [
+                  {
+                    text: "🔄 Retry",
+                    callback_data: `retry:${pendingActionId}`,
+                  },
+                ],
               ],
             }
           )
@@ -485,5 +539,18 @@ export const sendNotification = internalAction({
   handler: async (_ctx, { chatId, text, replyMarkup }) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN!
     return await sendMessage(botToken, chatId, text, replyMarkup)
+  },
+})
+
+// ── Clear inline keyboard from a message (called after approval via link) ──
+
+export const clearTelegramKeyboard = internalAction({
+  args: {
+    chatId: v.string(),
+    messageId: v.number(),
+  },
+  handler: async (_ctx, { chatId, messageId }) => {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN!
+    await editMessageReplyMarkup(botToken, chatId, messageId)
   },
 })

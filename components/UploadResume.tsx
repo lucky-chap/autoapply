@@ -150,7 +150,10 @@ export function UploadResume({ userId }: { userId: string }) {
               disabled={isUploading || isParsing}
               className="sr-only"
             />
-            <div className="inline-flex items-center gap-2 rounded-2xl bg-primary px-10 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 sm:w-auto">
+            <button
+              disabled={isUploading || isParsing}
+              className="inline-flex items-center gap-2 rounded-2xl bg-primary px-10 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
               {isUploading
                 ? "Uploading..."
                 : isParsing
@@ -158,7 +161,7 @@ export function UploadResume({ userId }: { userId: string }) {
                   : hasProfile
                     ? "Re-upload CV"
                     : "Select PDF File"}
-            </div>
+            </button>
           </label>
           <p className="text-xs text-gray-400">
             Supported formats: .pdf (Max 5MB)
@@ -198,10 +201,7 @@ export function UploadResume({ userId }: { userId: string }) {
               </div>
               <div className="space-y-2">
                 {profile.experience.map((exp, i) => (
-                  <div
-                    key={i}
-                    className="rounded-lg bg-gray-50 p-3 text-sm"
-                  >
+                  <div key={i} className="rounded-lg bg-gray-50 p-3 text-sm">
                     <span className="font-semibold text-primary">
                       {exp.title}
                     </span>{" "}
@@ -234,7 +234,8 @@ export function UploadResume({ userId }: { userId: string }) {
             Profile Links
           </h3>
           <p className="mb-4 text-sm text-gray-500">
-            Optional. When relevant, the AI will include these in your cover letters.
+            Optional. When relevant, the AI will include these in your cover
+            letters.
           </p>
           <div className="space-y-3">
             <div className="flex items-center gap-3">

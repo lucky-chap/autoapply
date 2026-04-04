@@ -6,12 +6,13 @@
  * pending-action preview message.
  */
 
+"use node"
 import { ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 import { extractJobInfoHelper, generateCoverLetterHelper } from "./aiActions"
 import { formatApplicationSent } from "./openclaw"
-import { escapeHtml, sendMessage } from "./telegramHelpers"
+import { escapeHtml, sendMessage, buildApprovalButtons } from "./telegramHelpers"
 
 // ── Create pending action and send preview to Telegram ──
 
@@ -55,12 +56,12 @@ export async function createPendingActionAndPreview(
       ? payload.coverLetter.slice(0, 500) + "..."
       : payload.coverLetter
 
+  const siteUrl =
+    process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
   const attachLabel = attachResume ? "📎 Resume: ON" : "📎 Resume: OFF"
-  const buttons: { text: string; callback_data: string }[][] = [
-    [
-      { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-      { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-    ],
+  const buttons: { text: string; url?: string; callback_data?: string }[][] = [
+    buildApprovalButtons(siteUrl, pendingActionId as string),
   ]
   if (hasResume) {
     buttons.push([

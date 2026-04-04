@@ -13,6 +13,7 @@ import { ActionCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { Id } from "./_generated/dataModel"
 import { analyzeAvailability, parseProposedTime } from "./calendar"
+import { buildApprovalButtons } from "./telegramHelpers"
 
 interface InterviewApp {
   _id: Id<"applications">
@@ -116,11 +117,11 @@ export async function handleInterviewScheduling(
       const preview = emailBody.length > 400 ? emailBody.slice(0, 400) + "..." : emailBody
       const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
 
-      const buttons: { text: string; callback_data: string }[][] = [
-        [
-          { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-          { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-        ],
+      const schedSiteUrl =
+        process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
+      const buttons: { text: string; url?: string; callback_data?: string }[][] = [
+        buildApprovalButtons(schedSiteUrl, pendingActionId as string),
       ]
       if (hasResume) {
         buttons.push([
@@ -205,11 +206,11 @@ export async function handleInterviewScheduling(
     const preview = emailBody.length > 400 ? emailBody.slice(0, 400) + "..." : emailBody
     const attachLine = hasResume ? "\n📎 <b>Resume will be attached</b>" : ""
 
-    const buttons: { text: string; callback_data: string }[][] = [
-      [
-        { text: "✅ Approve & Send", callback_data: `approve:${pendingActionId}` },
-        { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
-      ],
+    const availSiteUrl =
+      process.env.NEXT_PUBLIC_CONVEX_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || ""
+
+    const buttons: { text: string; url?: string; callback_data?: string }[][] = [
+      buildApprovalButtons(availSiteUrl, pendingActionId as string),
     ]
     if (hasResume) {
       buttons.push([

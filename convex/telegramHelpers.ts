@@ -227,6 +227,28 @@ export function encodeEmail({
   return toBase64Url(rawEmail)
 }
 
+// ── Approval URL button builder ──
+
+/**
+ * Build the inline keyboard row for approving/rejecting a pending email action.
+ * The "Approve" button is a URL button linking to the step-up auth endpoint,
+ * while "Reject" remains a callback button (low-risk action).
+ */
+export function buildApprovalButtons(
+  _siteUrl: string,
+  pendingActionId: string,
+  options?: { approveLabel?: string }
+): { text: string; url?: string; callback_data?: string }[] {
+  const approveLabel = options?.approveLabel ?? "✅ Approve & Send"
+  // Use the Next.js app URL so the approval goes through OAuth
+  // The approve route generates a fresh token on each click, so links never expire
+  const appBaseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || _siteUrl
+  return [
+    { text: approveLabel, url: `${appBaseUrl}/api/telegram/approve?action=${pendingActionId}` },
+    { text: "❌ Reject", callback_data: `reject:${pendingActionId}` },
+  ]
+}
+
 // ── Linking code generator ──
 
 export function generateLinkingCode(): string {

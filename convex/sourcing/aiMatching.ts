@@ -4,7 +4,7 @@ import { internal } from "../_generated/api"
 import { v } from "convex/values"
 import { Id } from "../_generated/dataModel"
 import { z } from "zod"
-import { GoogleGenAI, Type } from "@google/genai"
+import { callVertex } from "../../lib/vertex"
 
 /**
  * Evaluate a batch of newly-fetched job listings against a single user's
@@ -30,11 +30,6 @@ export const evaluateJobsForUser = internalAction({
       userId,
     })
 
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-      console.error("GEMINI_API_KEY not set, cannot run AI matching")
-      return { matched: 0 }
-    }
 
     const profileSummary = [
       `Skills: ${profile.skills.join(", ")}`,
@@ -43,7 +38,7 @@ export const evaluateJobsForUser = internalAction({
         ? `Target roles: ${prefs.targetRoles.join(", ")}`
         : "",
       prefs?.targetLocations?.length
-        ? `Target locations: ${prefs.targetLocations.join(", ")}`
+        ? `Preferred locations: ${prefs.targetLocations.join(", ")}`
         : "",
       prefs?.minSalary ? `Min salary: $${prefs.minSalary}` : "",
     ]
@@ -85,38 +80,15 @@ Analyze the match based on these criteria:
 - Experience level match
 - Remote/Location preference
 - Industry relevance
-`
 
-        const ai = new GoogleGenAI({ apiKey })
+Return ONLY a valid JSON object with:
+{"score": number (0-100), "reasoning": "string explanation"}
 
-        const schema = {
-          type: Type.OBJECT,
-          properties: {
-            score: {
-              type: Type.INTEGER,
-              description: "A match score from 0 to 100",
-            },
-            reasoning: {
-              type: Type.STRING,
-              description: "A short explanation for the score",
-            },
-          },
-          required: ["score", "reasoning"],
-        }
+Return ONLY the JSON object, NO markdown formatting.`
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: schema as any,
-            temperature: 0.1,
-          },
-        })
+        const resText = await callVertex(prompt, 1000)
 
-        const resText = response.text
-
-        if (!resText) throw new Error("Empty response from Gemini")
+        if (!resText) throw new Error("Empty response from AI")
 
         // 1. Clean JSON: Remove markdown fences (if present) and whitespace
         const cleanJson = resText
@@ -124,9 +96,14 @@ Analyze the match based on these criteria:
           .replace(/```\s*$/, "")
           .trim()
 
+        const jsonMatch = cleanJson.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) {
+          throw new Error("No JSON found in response")
+        }
+
         let parsed: any
         try {
-          parsed = JSON.parse(cleanJson)
+          parsed = JSON.parse(jsonMatch[0])
         } catch (err) {
           console.error(
             `AI match JSON parse error for job ${jobId}. Raw:`,
@@ -154,21 +131,28 @@ Analyze the match based on these criteria:
 
         // Create a match record regardless of score (mark low scores as "ignored")
         // This prevents redundant AI evaluations in future cycles.
-        const matchId: Id<"userJobMatches"> = await ctx.runMutation(internal.sourcing.store.createMatch, {
-          userId,
-          jobListingId: jobId,
-          matchScore: score,
-          matchReasoning: reasoning,
-          status: score >= 60 ? "new" : "ignored",
-        })
+        const matchId: Id<"userJobMatches"> = await ctx.runMutation(
+          internal.sourcing.store.createMatch,
+          {
+            userId,
+            jobListingId: jobId,
+            matchScore: score,
+            matchReasoning: reasoning,
+            status: score >= 60 ? "new" : "ignored",
+          }
+        )
 
         if (score >= 80) {
           // Trigger automated outreach for high-quality matches
-          await ctx.scheduler.runAfter(0, internal.outreach.orchestrator.runPipelineForMatch, {
-            userId,
-            jobListingId: jobId,
-            matchId,
-          });
+          await ctx.scheduler.runAfter(
+            0,
+            internal.outreach.orchestrator.runPipelineForMatch,
+            {
+              userId,
+              jobListingId: jobId,
+              matchId,
+            }
+          )
         }
 
         if (score >= 60) {
@@ -182,8 +166,14 @@ Analyze the match based on these criteria:
         await new Promise((resolve) => setTimeout(resolve, 4000))
       } catch (e: any) {
         // Stop entirely on quota exhaustion — no point burning through the loop
-        if (e?.status === 429 || e?.message?.includes("429") || e?.message?.includes("RESOURCE_EXHAUSTED")) {
-          console.warn(`Quota exhausted after ${matched} matches for ${userId}, stopping early`)
+        if (
+          e?.status === 429 ||
+          e?.message?.includes("429") ||
+          e?.message?.includes("RESOURCE_EXHAUSTED")
+        ) {
+          console.warn(
+            `Quota exhausted after ${matched} matches for ${userId}, stopping early`
+          )
           break
         }
         console.error(`AI matching error for job ${jobId}:`, e)

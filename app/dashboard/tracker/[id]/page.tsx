@@ -137,29 +137,29 @@ export default function TrackerPage() {
   const engagementLabel = getEngagementLabel(openCount)
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,#f1f7e4_0%,#f8f8f6_45%,#f2f1ee_100%)]">
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <Link
-          href="/dashboard"
-          className="group mb-8 inline-flex items-center gap-2 text-sm font-semibold text-black/60 transition-colors hover:text-black"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          Back to Dashboard
-        </Link>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+      <Link
+        href="/dashboard"
+        className="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-black/50 transition-colors hover:text-black"
+      >
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+        Back to Dashboard
+      </Link>
 
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <article className="relative overflow-hidden rounded-3xl border border-black/10 bg-white p-6 sm:p-8">
-            <div className="pointer-events-none absolute top-0 right-0 h-28 w-28 rounded-full bg-[#b8ff66]/40 blur-2xl" />
-            <div className="relative">
-              <span
-                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusColors[application.status] ?? "border border-gray-200 bg-gray-50 text-gray-600"}`}
-              >
-                {application.status}
-              </span>
-              <h1 className="mt-4 font-display text-3xl leading-tight font-semibold text-primary sm:text-4xl">
-                {application.company}
-              </h1>
-              <p className="mt-1 text-base text-black/70">{application.role}</p>
+      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <article className="relative overflow-hidden rounded-3xl border border-black/10 bg-white p-6 sm:p-8">
+          <div className="relative">
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusColors[application.status] ?? "border border-gray-200 bg-gray-50 text-gray-600"}`}
+            >
+              {application.status}
+            </span>
+            <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-black sm:text-5xl md:leading-[1.1]">
+              {application.company}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60 sm:text-base">
+              {application.role}
+            </p>
 
               <div className="mt-6 grid gap-3 text-xs text-black/60 sm:grid-cols-2">
                 <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-[#f8f8f8] px-3 py-2.5">
@@ -181,7 +181,7 @@ export default function TrackerPage() {
 
           <div className="space-y-6">
             <article className="rounded-3xl border border-black/10 bg-[#151515] p-6 text-white">
-              <div className="flex items-center gap-2 text-xs font-semibold tracking-[0.1em] text-white/70 uppercase">
+              <div className="flex items-center gap-2 text-xs font-semibold tracking-widest text-white/70 uppercase">
                 <Activity className="h-3.5 w-3.5" />
                 Engagement
               </div>
@@ -202,7 +202,7 @@ export default function TrackerPage() {
               <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#b8ff66] text-black">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <h2 className="text-sm font-semibold tracking-[0.08em] text-black/65 uppercase">
+              <h2 className="text-sm font-semibold tracking-widest text-black/65 uppercase">
                 Recommended next step
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-black/70">
@@ -216,7 +216,7 @@ export default function TrackerPage() {
         <section className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
           <article className="rounded-3xl border border-black/10 bg-white">
             <div className="border-b border-black/10 px-6 py-4">
-              <h2 className="text-sm font-bold tracking-[0.08em] text-black/70 uppercase">
+              <h2 className="text-sm font-bold tracking-widest text-black/70 uppercase">
                 Email Open History
               </h2>
             </div>
@@ -264,7 +264,7 @@ export default function TrackerPage() {
           </article>
 
           <article className="rounded-3xl border border-black/10 bg-white p-6">
-            <h2 className="text-sm font-bold tracking-[0.08em] text-black/70 uppercase">
+            <h2 className="text-sm font-bold tracking-widest text-black/70 uppercase">
               Activity Summary
             </h2>
             <div className="mt-4 space-y-3">
@@ -311,8 +311,7 @@ export default function TrackerPage() {
               timeline in real time.
             </div>
           </article>
-        </section>
-      </div>
+      </section>
     </div>
   )
 }

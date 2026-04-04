@@ -100,6 +100,14 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
+  approvalTokens: defineTable({
+    pendingActionId: v.id("pendingActions"),
+    token: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_pendingActionId", ["pendingActionId"]),
+
   pendingActions: defineTable({
     userId: v.string(),
     actionType: v.literal("send_email"),

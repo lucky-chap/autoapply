@@ -1,5 +1,6 @@
 import { auth0 } from "@/lib/auth0"
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import {
   Shield,
   CheckCircle2,
@@ -7,6 +8,7 @@ import {
   ExternalLink,
   PlusCircle,
   RefreshCw,
+  ArrowLeft,
 } from "lucide-react"
 
 // These are the scopes we want to verify are present
@@ -72,17 +74,22 @@ export default async function PermissionsPage() {
   const connectUrl = `/auth/connect?connection=google-oauth2&prompt=consent&${scopeParams}`
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-      <div className="mb-10 text-center">
-        <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
-          <Shield className="h-8 w-8 text-blue-600" />
-        </div>
-        <h1 className="font-display text-3xl font-bold text-primary">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+      <Link
+        href="/dashboard"
+        className="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-black/50 transition-colors hover:text-black"
+      >
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+        Back to Dashboard
+      </Link>
+
+      <div className="mb-10">
+        <h1 className="font-display text-4xl font-semibold tracking-tight text-black sm:text-5xl md:leading-[1.1]">
           Security & Permissions
         </h1>
-        <p className="mx-auto mt-2 max-w-md text-gray-500">
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60 sm:text-base">
           AutoApply operates with zero passwords. We use delegated OAuth tokens
-          via Auth0 Token Vault.
+          via Auth0 Token Vault for secure access.
         </p>
       </div>
 
@@ -166,7 +173,8 @@ export default async function PermissionsPage() {
           {!isConnected && (
             <div className="border-t border-gray-50 bg-gray-50/30 p-8 text-center">
               <p className="text-sm text-gray-500">
-                Google services are not connected yet. Grant access so AutoApply can send emails and check your calendar.
+                Google services are not connected yet. Grant access so AutoApply
+                can send emails and check your calendar.
               </p>
               <a
                 href={connectUrl}

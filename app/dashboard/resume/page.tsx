@@ -11,20 +11,20 @@ export default async function ResumePage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <Link
         href="/dashboard"
-        className="group mb-8 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition-colors hover:text-primary"
+        className="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-black/50 transition-colors hover:text-black"
       >
         <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
         Back to Dashboard
       </Link>
 
       <div className="mb-10">
-        <h1 className="font-display text-3xl font-bold text-primary">
+        <h1 className="font-display text-4xl font-semibold tracking-tight text-black sm:text-5xl md:leading-[1.1]">
           Resume Profile
         </h1>
-        <p className="mt-2 text-gray-500">
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60 sm:text-base">
           Your resume powers every generated application and cover letter.
         </p>
       </div>

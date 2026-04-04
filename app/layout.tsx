@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { Auth0Provider } from "@auth0/nextjs-auth0/client"
 import { auth0 } from "@/lib/auth0"
 import { ConvexClientProvider } from "@/components/ConvexClientProvider"
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 export const metadata: Metadata = {
   title: "AutoApply — AI Agent That Actually Applies For You",
@@ -49,13 +50,15 @@ export default async function RootLayout({
       )}
     >
       <body>
-        <Auth0Provider user={session?.user}>
-          <ConvexClientProvider>
-            <ThemeProvider>
-              <main className="min-h-screen bg-white">{children}</main>
-            </ThemeProvider>
-          </ConvexClientProvider>
-        </Auth0Provider>
+        <TooltipProvider>
+          <Auth0Provider user={session?.user}>
+            <ConvexClientProvider>
+              <ThemeProvider>
+                <main className="min-h-screen bg-white">{children}</main>
+              </ThemeProvider>
+            </ConvexClientProvider>
+          </Auth0Provider>
+        </TooltipProvider>
       </body>
     </html>
   )

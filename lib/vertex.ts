@@ -1,19 +1,34 @@
-import { generateText } from "ai"
-import { vertex } from "@ai-sdk/google-vertex"
+"use node"
 
-// Vertex AI Gemini is used for structured extraction and generation in tools.
+/**
+ * Proxy-based Vertex AI caller for Convex.
+ * This file is safe to import in Convex actions as it only uses global fetch.
+ */
 export async function callVertex(
   prompt: string,
   maxTokens = 4000
 ): Promise<string> {
-  try {
-    const { text } = await generateText({
-      model: vertex("gemini-2.5-flash"),
-      prompt,
-    } as any)
-    return text
-  } catch (error) {
-    console.error("Vertex AI error:", error)
-    throw error
+  const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  const apiUrl = `${baseUrl}/api/ai/vertex`
+  const secret = process.env.CONVEX_API_SECRET
+
+  console.log(`[lib/vertex] Proxying AI call to ${apiUrl} (length: ${prompt.length})`)
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": secret ? `Bearer ${secret}` : "",
+    },
+    body: JSON.stringify({ prompt, maxTokens }),
+  })
+
+  if (!response.ok) {
+    const errText = await response.text()
+    console.error(`[lib/vertex] Proxy error (${response.status}):`, errText)
+    throw new Error(`AI Proxy Error: ${response.status} - ${errText}`)
   }
+
+  const data = await response.json()
+  return data.text
 }

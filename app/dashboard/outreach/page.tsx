@@ -5,7 +5,8 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Users, Reply, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Mail, Users, Reply, AlertCircle, ArrowLeft } from "lucide-react";
 
 // Mock userId for now, in a real app this would come from auth
 const userId = "user_123"; 
@@ -24,8 +25,23 @@ export default function OutreachDashboard() {
   }
 
   return (
-    <div className="container mx-auto py-10 space-y-8">
-      <h1 className="text-4xl font-bold tracking-tight">Outreach Automation</h1>
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+      <Link
+        href="/dashboard"
+        className="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-black/50 transition-colors hover:text-black"
+      >
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+        Back to Dashboard
+      </Link>
+
+      <div className="mb-10">
+        <h1 className="font-display text-4xl font-semibold tracking-tight text-black sm:text-5xl md:leading-[1.1]">
+          Outreach Automation
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60 sm:text-base">
+          Monitor your automated outbound efforts and prospect engagement.
+        </p>
+      </div>
       
       {/* Stats Overview */}
       <div className="grid gap-4 md:grid-cols-4">

@@ -206,7 +206,7 @@ export function DashboardWeeklyFocus({ userId }: { userId: string }) {
 
   return (
     <div className="rounded-3xl border border-black/15 bg-white p-6">
-      <p className="text-xs font-semibold tracking-[0.1em] text-black/60 uppercase">
+      <p className="text-xs font-semibold tracking-widest text-black/60 uppercase">
         Weekly focus
       </p>
       <div className="mt-4 space-y-4">
@@ -258,11 +258,7 @@ export function DashboardStatCards({ userId }: { userId: string }) {
         {Array.from({ length: 4 }).map((_, idx) => (
           <article
             key={idx}
-            className={`rounded-2xl border p-5 ${
-              idx % 2 === 1
-                ? "border-black/15 bg-[#161616] text-white"
-                : "border-black/15 bg-white text-black"
-            }`}
+            className={`rounded-2xl border p-5 border-black/10 bg-[#fafafa] text-black`}
           >
             <div className="h-5 w-5 animate-pulse rounded bg-black/20" />
             <div className="mt-4 h-8 w-14 animate-pulse rounded bg-black/15" />
@@ -306,25 +302,19 @@ export function DashboardStatCards({ userId }: { userId: string }) {
       {cards.map((card, idx) => (
         <article
           key={card.label}
-          className={`rounded-2xl border p-5 ${
-            idx % 2 === 1
-              ? "border-black/15 bg-[#161616] text-white"
-              : "border-black/15 bg-white text-black"
-          }`}
+          className={`rounded-2xl border p-5 border-black/5 bg-[#fafafa] text-black shadow-sm`}
         >
           <card.icon className="h-5 w-5" />
-          <p className="mt-4 text-3xl leading-none font-semibold">
+          <p className="mt-4 text-3xl leading-none font-semibold text-black">
             {card.value}
           </p>
           <p
-            className={`mt-2 text-xs font-semibold tracking-[0.1em] uppercase ${
-              idx % 2 === 1 ? "text-white/70" : "text-black/60"
-            }`}
+            className={`mt-2 text-xs font-semibold tracking-[0.1em] uppercase text-black/60`}
           >
             {card.label}
           </p>
           <p
-            className={`mt-2 text-xs ${idx % 2 === 1 ? "text-white/60" : "text-black/50"}`}
+            className={`mt-2 text-xs text-black/50`}
           >
             {card.helper}
           </p>
@@ -367,8 +357,8 @@ export function ApplicationsTable({ userId }: { userId: string }) {
         <div className="text-center">
           <p className="font-semibold text-primary">No applications yet</p>
           <p className="mt-1 max-w-xs text-sm text-gray-500">
-            Paste a job description and let the AI craft a personalised cover
-            letter for you.
+            Paste a job description with a recruiter email and let the AI craft
+            a personalised cover letter for you.
           </p>
         </div>
         <Link
@@ -385,20 +375,20 @@ export function ApplicationsTable({ userId }: { userId: string }) {
   return (
     <Table>
       <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          <TableHead className="text-[11px] tracking-[0.1em] text-black/45 uppercase">
+        <TableRow>
+          <TableHead>
             Company
           </TableHead>
-          <TableHead className="hidden text-[11px] tracking-[0.1em] text-black/45 uppercase sm:table-cell">
+          <TableHead className="hidden sm:table-cell">
             Recipient
           </TableHead>
-          <TableHead className="text-[11px] tracking-[0.1em] text-black/45 uppercase">
+          <TableHead>
             Status
           </TableHead>
-          <TableHead className="text-center text-[11px] tracking-[0.1em] text-black/45 uppercase">
+          <TableHead className="text-center">
             Engagement
           </TableHead>
-          <TableHead className="hidden text-[11px] tracking-[0.1em] text-black/45 uppercase sm:table-cell">
+          <TableHead className="hidden sm:table-cell">
             Sent
           </TableHead>
         </TableRow>
@@ -439,15 +429,25 @@ export function ApplicationsTable({ userId }: { userId: string }) {
             <TableCell className="text-center">
               <div className="inline-flex items-center gap-2">
                 {(app.clickCount ?? 0) > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-emerald-600" title="Link clicks">
+                  <span
+                    className="inline-flex items-center gap-1 text-emerald-600"
+                    title="Link clicks"
+                  >
                     <MousePointerClick className="h-3.5 w-3.5" />
-                    <span className="text-sm font-semibold">{app.clickCount}</span>
+                    <span className="text-sm font-semibold">
+                      {app.clickCount}
+                    </span>
                   </span>
                 ) : null}
                 {(app.openCount ?? 0) > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-blue-600" title="Email opens">
+                  <span
+                    className="inline-flex items-center gap-1 text-blue-600"
+                    title="Email opens"
+                  >
                     <Eye className="h-3.5 w-3.5" />
-                    <span className="text-sm font-semibold">{app.openCount}</span>
+                    <span className="text-sm font-semibold">
+                      {app.openCount}
+                    </span>
                   </span>
                 ) : null}
                 {(app.clickCount ?? 0) === 0 && (app.openCount ?? 0) === 0 ? (

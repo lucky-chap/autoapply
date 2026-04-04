@@ -36,10 +36,14 @@ export default function PreferencesPage() {
   )
   const toggleAutoMode = useMutation(api.userSettings.toggleAutoMode)
   const updateAvailability = useMutation(api.userSettings.updateAvailability)
-  const updateOpenclawSettings = useMutation(api.userSettings.updateOpenclawSettings)
+  const updateOpenclawSettings = useMutation(
+    api.userSettings.updateOpenclawSettings
+  )
 
   const [isSaving, setIsSaving] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle")
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">(
+    "idle"
+  )
   const [roles, setRoles] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [minSalary, setMinSalary] = useState<number | "">("")
@@ -82,7 +86,7 @@ export default function PreferencesPage() {
   }, [userSettings])
 
   const handleSave = async () => {
-    if (!userId) return;
+    if (!userId) return
     try {
       setIsSaving(true)
       setSaveStatus("idle")
@@ -104,7 +108,7 @@ export default function PreferencesPage() {
   }
 
   const handleAutoModeToggle = async () => {
-    if (!userId) return;
+    if (!userId) return
     if (!userSettings?.autoMode) {
       setShowAutoConfirm(true)
       return
@@ -113,7 +117,7 @@ export default function PreferencesPage() {
   }
 
   const handleSaveAvailability = async () => {
-    if (!userId) return;
+    if (!userId) return
     setAvailSaving(true)
     try {
       await updateAvailability({ userId, availabilitySchedule: availSchedule })
@@ -133,7 +137,7 @@ export default function PreferencesPage() {
   }
 
   const handleSaveOpenclaw = async () => {
-    if (!userId) return;
+    if (!userId) return
     setOpenclawSaving(true)
     try {
       await updateOpenclawSettings({
@@ -148,7 +152,7 @@ export default function PreferencesPage() {
   }
 
   const confirmAutoMode = async () => {
-    if (!userId) return;
+    if (!userId) return
     setShowAutoConfirm(false)
     await toggleAutoMode({ userId })
   }
@@ -174,21 +178,21 @@ export default function PreferencesPage() {
   const isAutoMode = userSettings?.autoMode ?? false
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <Link
         href="/dashboard"
-        className="group mb-8 inline-flex items-center gap-2 text-sm font-semibold text-gray-500 transition-colors hover:text-primary"
+        className="group mb-4 inline-flex items-center gap-2 text-sm font-medium text-black/50 transition-colors hover:text-black"
       >
         <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
         Back to Dashboard
       </Link>
 
-      <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl font-bold text-primary">
+          <h1 className="font-display text-4xl font-semibold tracking-tight text-black sm:text-5xl md:leading-[1.1]">
             Application Preferences
           </h1>
-          <p className="mt-2 text-gray-500">
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60 sm:text-base">
             Tell AutoApply what to target so it only drafts for relevant roles.
           </p>
         </div>
@@ -221,62 +225,6 @@ export default function PreferencesPage() {
       </div>
 
       <div className="space-y-8">
-        {/* Auto Mode Toggle */}
-        <section className={`rounded-3xl border p-5 shadow-sm sm:p-8 ${isAutoMode ? "border-violet-200 bg-violet-50/50" : "border-gray-100 bg-white"}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isAutoMode ? "bg-violet-100 text-violet-600" : "bg-gray-100 text-gray-500"}`}>
-                <Zap className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-primary">Auto Mode</h2>
-                <p className="text-sm text-gray-500">
-                  {isAutoMode
-                    ? "Applications send automatically without manual approval"
-                    : "Keep manual approval before each send"}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleAutoModeToggle}
-              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${isAutoMode ? "bg-violet-600" : "bg-gray-200"}`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 translate-y-1 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${isAutoMode ? "translate-x-6" : "translate-x-1"}`}
-              />
-            </button>
-          </div>
-        </section>
-
-        {/* Confirmation Dialog */}
-        {showAutoConfirm && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-            <p className="mb-4 text-sm font-semibold text-red-800">
-              Are you sure you want to enable Auto Mode?
-            </p>
-            <p className="mb-4 text-sm text-red-700">
-              When enabled, the agent will generate cover letters and send
-              applications via your Gmail <strong>immediately</strong> without
-              asking for your approval. Follow-up emails will also be sent
-              automatically.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={confirmAutoMode}
-                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-red-700"
-              >
-                Yes, enable Auto Mode
-              </button>
-              <button
-                onClick={() => setShowAutoConfirm(false)}
-                className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-gray-700 ring-1 ring-gray-200 transition-all hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
         <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -451,7 +399,10 @@ export default function PreferencesPage() {
                         const m = (i % 2) * 30
                         const label = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
                         return (
-                          <option key={label} value={`${h}:${m.toString().padStart(2, "0")}`}>
+                          <option
+                            key={label}
+                            value={`${h}:${m.toString().padStart(2, "0")}`}
+                          >
                             {label}
                           </option>
                         )
@@ -472,7 +423,10 @@ export default function PreferencesPage() {
                         const m = (i % 2) * 30
                         const label = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
                         return (
-                          <option key={label} value={`${h}:${m.toString().padStart(2, "0")}`}>
+                          <option
+                            key={label}
+                            value={`${h}:${m.toString().padStart(2, "0")}`}
+                          >
                             {label}
                           </option>
                         )
@@ -489,11 +443,15 @@ export default function PreferencesPage() {
         <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${openclawEnabled ? "bg-teal-50 text-teal-600" : "bg-gray-100 text-gray-500"}`}>
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-xl ${openclawEnabled ? "bg-teal-50 text-teal-600" : "bg-gray-100 text-gray-500"}`}
+              >
                 <Bell className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-primary">Push Notifications</h2>
+                <h2 className="text-xl font-bold text-primary">
+                  Push Notifications (Coming Soon)
+                </h2>
                 <p className="text-sm text-gray-500">
                   Receive push updates when application activity changes.
                 </p>
@@ -501,7 +459,8 @@ export default function PreferencesPage() {
             </div>
             <button
               onClick={handleSaveOpenclaw}
-              disabled={openclawSaving}
+              // disabled={openclawSaving}
+              disabled
               className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-teal-700 disabled:opacity-50"
             >
               {openclawSaving ? (
@@ -515,7 +474,9 @@ export default function PreferencesPage() {
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold text-gray-700">Enable notifications</label>
+              <label className="text-sm font-semibold text-gray-700">
+                Enable notifications
+              </label>
               <button
                 onClick={() => setOpenclawEnabled(!openclawEnabled)}
                 className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${openclawEnabled ? "bg-teal-600" : "bg-gray-200"}`}
@@ -556,8 +517,8 @@ export default function PreferencesPage() {
       <div className="mt-8 flex gap-4 rounded-2xl border border-amber-100 bg-amber-50 p-6">
         <Settings2 className="h-6 w-6 shrink-0 text-amber-600" />
         <p className="text-sm leading-relaxed text-amber-900">
-          These preferences guide AutoApply to prioritize strong-fit openings and
-          avoid generating low-relevance applications.
+          These preferences guide AutoApply to prioritize strong-fit openings
+          and avoid generating low-relevance applications.
         </p>
       </div>
     </div>

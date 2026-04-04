@@ -100,6 +100,150 @@ http.route({
   }),
 })
 
+// Email send approval — OAuth-protected via Next.js API route
+// The Next.js route checks Auth0 session, then calls this POST endpoint with
+// a shared secret and the authenticated userId for ownership verification.
+http.route({
+  path: "/approve/email",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    // Verify shared secret from Next.js API route
+    const authHeader = req.headers.get("Authorization")
+    if (!authHeader || authHeader !== `Bearer ${process.env.CONVEX_API_SECRET}`) {
+      return new Response("Unauthorized", { status: 401 })
+    }
+
+    const url = new URL(req.url)
+    const token = url.searchParams.get("token")
+    const userId = url.searchParams.get("userId")
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Missing token" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    const result = await ctx.runMutation(internal.telegramLinks.consumeApprovalToken, { token })
+
+    if (!result.success) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired approval link" }),
+        { status: 410, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    // Token valid — verify the authenticated user owns this pending action
+    const action = await ctx.runQuery(internal.pendingActions.getById, {
+      id: result.pendingActionId,
+    })
+
+    if (!action) {
+      return new Response(
+        JSON.stringify({ error: "Action not found" }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    if (userId && action.userId !== userId) {
+      return new Response(
+        JSON.stringify({ error: "This approval belongs to a different account. Please log in with the correct account." }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    // Approve the pending action
+    try {
+      await ctx.runMutation(internal.pendingActions.internalApprove, {
+        id: result.pendingActionId,
+      })
+
+      // Notify via Telegram that it was approved
+      if (action.telegramChatId) {
+        await ctx.scheduler.runAfter(0, internal.telegram.sendNotification, {
+          chatId: action.telegramChatId,
+          text: `✅ <b>Approved!</b> Sending your application to <b>${action.payload.company}</b> (${action.payload.role}) now...`,
+        })
+
+        // Remove the inline keyboard from the original preview message
+        if (action.telegramMessageId) {
+          await ctx.scheduler.runAfter(0, internal.telegram.clearTelegramKeyboard, {
+            chatId: action.telegramChatId,
+            messageId: parseInt(action.telegramMessageId, 10),
+          })
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          company: action.payload.company,
+          role: action.payload.role,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    } catch (err) {
+      return new Response(
+        JSON.stringify({ error: `Could not approve: ${String(err)}` }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      )
+    }
+  }),
+})
+
+
+
+
+// Generate a fresh approval token for a pending action (called by Next.js approve route)
+http.route({
+  path: "/approve/token",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const authHeader = req.headers.get("Authorization")
+    if (!authHeader || authHeader !== `Bearer ${process.env.CONVEX_API_SECRET}`) {
+      return new Response("Unauthorized", { status: 401 })
+    }
+
+    const { pendingActionId, userId } = await req.json()
+    if (!pendingActionId) {
+      return new Response(JSON.stringify({ error: "Missing pendingActionId" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // Verify the pending action exists and belongs to this user
+    const action = await ctx.runQuery(internal.pendingActions.getById, {
+      id: pendingActionId as Id<"pendingActions">,
+    })
+
+    if (!action) {
+      return new Response(
+        JSON.stringify({ error: "Action not found or already processed" }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    if (userId && action.userId !== userId) {
+      return new Response(
+        JSON.stringify({ error: "This action belongs to a different account" }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    // Generate a fresh approval token
+    const token: string = await ctx.runMutation(
+      internal.telegramLinks.createApprovalToken,
+      { pendingActionId: pendingActionId as Id<"pendingActions"> }
+    )
+
+    return new Response(
+      JSON.stringify({ token }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    )
+  }),
+})
+
 // Telegram bot webhook
 http.route({
   path: "/telegram/webhook",
