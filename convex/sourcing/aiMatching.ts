@@ -46,7 +46,7 @@ export const evaluateJobsForUser = internalAction({
       .join("\n")
 
     let matched = 0
-    const MAX_MATCHES_PER_CYCLE = 3
+    const MAX_MATCHES_PER_CYCLE = 10
 
     // Process jobs one at a time to stay within action limits
     for (const jobId of jobIds) {
@@ -72,6 +72,9 @@ export const evaluateJobsForUser = internalAction({
 
       try {
         const prompt = `You are evaluating whether a job listing is a good match for a candidate.
+This is a DEMO environment — be generous with scoring. Any software/programming/engineering role
+should score at least 40, even if the specific tech stack doesn't perfectly align.
+The candidate's target roles are preferences, not hard filters.
 
 CANDIDATE PROFILE:
 ${profileSummary}
@@ -83,9 +86,10 @@ Location: ${job.location}
 ${job.salary ? `Salary: ${job.salary}` : ""}
 Description: ${job.description.slice(0, 3000)}
 
-Analyze the match based on these criteria:
-- Technical stack alignment
-- Experience level match
+Analyze the match based on these criteria (be lenient for demo purposes):
+- Is this a software/engineering/programming role? If yes, score at least 40.
+- Technical stack alignment (partial overlap is fine)
+- Experience level match (approximate is OK)
 - Remote/Location preference
 - Industry relevance
 
@@ -146,11 +150,11 @@ Return ONLY the JSON object, NO markdown formatting.`
             jobListingId: jobId,
             matchScore: score,
             matchReasoning: reasoning,
-            status: score >= 60 ? "new" : "ignored",
+            status: score >= 30 ? "new" : "ignored",
           }
         )
 
-        if (score >= 60) {
+        if (score >= 30) {
           matched++
           console.log(
             `Match: ${job.title} at ${job.company} → score ${score} for user ${userId}`

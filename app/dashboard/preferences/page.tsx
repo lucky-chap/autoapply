@@ -205,6 +205,11 @@ export default function PreferencesPage() {
       </div>
 
       <div className="space-y-8">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-relaxed text-amber-800">
+          <strong>Demo mode:</strong> Target roles are treated as preferences, not strict filters.
+          You&apos;ll receive matches for any software/engineering role to showcase the full pipeline.
+        </div>
+
         <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -497,8 +502,8 @@ export default function PreferencesPage() {
       <div className="mt-8 flex gap-4 rounded-2xl border border-amber-100 bg-amber-50 p-6">
         <Settings2 className="h-6 w-6 shrink-0 text-amber-600" />
         <p className="text-sm leading-relaxed text-amber-900">
-          These preferences guide AutoApply to prioritize strong-fit openings
-          and avoid generating low-relevance applications.
+          These preferences guide AutoApply to prioritize strong-fit openings.
+          In demo mode, all software/engineering roles are included to showcase the pipeline.
         </p>
       </div>
     </div>

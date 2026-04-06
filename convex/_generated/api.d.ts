@@ -33,6 +33,7 @@ import type * as sourcing_aiMatching from "../sourcing/aiMatching.js";
 import type * as sourcing_arbeitnow from "../sourcing/arbeitnow.js";
 import type * as sourcing_cleanup from "../sourcing/cleanup.js";
 import type * as sourcing_cron from "../sourcing/cron.js";
+import type * as sourcing_demoBackup from "../sourcing/demoBackup.js";
 import type * as sourcing_hackernews from "../sourcing/hackernews.js";
 import type * as sourcing_queries from "../sourcing/queries.js";
 import type * as sourcing_remotive from "../sourcing/remotive.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "sourcing/arbeitnow": typeof sourcing_arbeitnow;
   "sourcing/cleanup": typeof sourcing_cleanup;
   "sourcing/cron": typeof sourcing_cron;
+  "sourcing/demoBackup": typeof sourcing_demoBackup;
   "sourcing/hackernews": typeof sourcing_hackernews;
   "sourcing/queries": typeof sourcing_queries;
   "sourcing/remotive": typeof sourcing_remotive;

@@ -116,16 +116,17 @@ export const dispatchMatchesToTelegram = internalAction({
       return 0
     }
 
-    // Mark these as notified so they aren't fetched as "unnotified" next cycle
-    await ctx.runMutation(internal.sourcing.store.markAsNotified, {
-      matchIds: topMatches.map((m) => m._id),
-    })
-
     // Send paginated job match card starting at index 0
+    // IMPORTANT: Send BEFORE marking as notified so failed sends can be retried
     await ctx.runAction(internal.sourcing.telegramNotify.renderJobMatchPage, {
       userId,
       chatId: link.telegramChatId,
       index: 0,
+    })
+
+    // Only mark as notified AFTER successful Telegram send
+    await ctx.runMutation(internal.sourcing.store.markAsNotified, {
+      matchIds: topMatches.map((m) => m._id),
     })
 
     console.log(`Dispatched paginated match card to Telegram for ${userId}`)

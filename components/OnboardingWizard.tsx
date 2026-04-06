@@ -377,6 +377,11 @@ function PreferencesStep({
         </div>
       </div>
 
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-800">
+        <strong>Demo mode:</strong> Your target roles are treated as preferences, not strict filters.
+        You&apos;ll receive matches for any software/engineering role to showcase the full pipeline.
+      </div>
+
       <div className="space-y-6">
         <div>
           <label className="mb-2 block text-sm font-semibold text-gray-700">

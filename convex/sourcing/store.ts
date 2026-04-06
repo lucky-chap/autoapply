@@ -276,3 +276,26 @@ export const markAsNotified = internalMutation({
     }
   }
 })
+
+// One-time helper: reset all matches to unnotified so they get re-dispatched
+export const resetNotifiedFlags = internalMutation({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    const matches = await ctx.db
+      .query("userJobMatches")
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", userId).eq("status", "new")
+      )
+      .collect()
+
+    let count = 0
+    for (const match of matches) {
+      if (match.telegramNotified === true) {
+        await ctx.db.patch(match._id, { telegramNotified: false })
+        count++
+      }
+    }
+    console.log(`Reset ${count} matches to unnotified for ${userId}`)
+    return count
+  }
+})

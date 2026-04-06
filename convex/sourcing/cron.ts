@@ -97,11 +97,11 @@ export const pollJobBoards = internalAction({
       try {
         const emailJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
           internal.sourcing.store.getUnevaluatedJobsForUser,
-          { userId: user.userId, limit: 10, requireEmail: true }
+          { userId: user.userId, limit: 20, requireEmail: true }
         )
         const anyJobs: Array<{ _id: Id<"jobListings"> }> = await ctx.runQuery(
           internal.sourcing.store.getUnevaluatedJobsForUser,
-          { userId: user.userId, limit: 5 }
+          { userId: user.userId, limit: 10 }
         )
 
         // Merge and deduplicate
@@ -146,19 +146,21 @@ export const pollJobBoards = internalAction({
       }
     }
 
-    // 8. Alert users who got zero dispatches
+    // 8. Alert users who got zero dispatches — only for config issues,
+    // NOT for "no matching jobs" which is normal and expected most cycles.
     if (totalDispatched === 0) {
       console.warn("JobBoard cron: cycle complete with ZERO dispatches")
       for (const user of activeUsers) {
         const diag = userDiags[user.userId]
         if (diag?.hasTelegramLink) {
-          const issues = getDiagnosticIssues(diag)
+          const issues = getDiagnosticIssues(diag).filter(
+            (i) => !i.includes("No matching jobs found")
+          )
           if (issues.length > 0) {
             await alertUserIfLinked(
               ctx,
               user.userId,
-              `Job sourcing cycle completed but no new matches were found.\n\n` +
-                `Issues detected:\n${issues.map((i) => `- ${i}`).join("\n")}\n\n` +
+              `Pipeline issue detected:\n${issues.map((i) => `- ${i}`).join("\n")}\n\n` +
                 `Use /status to see your full pipeline health.`
             )
           }

@@ -295,4 +295,23 @@ export default defineSchema({
   })
     .index("by_userId_and_status", ["userId", "status"])
     .index("by_userId_and_jobListingId", ["userId", "jobListingId"]),
+
+  demoBackupMatches: defineTable({
+    originalMatchId: v.string(),
+    userId: v.string(),
+    jobListingId: v.id("jobListings"),
+    status: v.union(
+      v.literal("new"),
+      v.literal("ignored"),
+      v.literal("approved"),
+      v.literal("applied")
+    ),
+    matchScore: v.optional(v.number()),
+    matchReasoning: v.optional(v.string()),
+    telegramNotified: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    backedUpAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
 })

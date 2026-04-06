@@ -1,34 +1,48 @@
 "use node"
 
 /**
- * Proxy-based Vertex AI caller for Convex.
- * This file is safe to import in Convex actions as it only uses global fetch.
+ * Direct Gemini API caller for Convex actions.
+ * Uses the Gemini REST API with an API key — no proxy, no ADC, no SDK needed.
+ * Set GOOGLE_GENERATIVE_AI_API_KEY in Convex environment variables.
  */
 export async function callVertex(
   prompt: string,
   maxTokens = 4000
 ): Promise<string> {
-  const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
-  const apiUrl = `${baseUrl}/api/ai/vertex`
-  const secret = process.env.CONVEX_API_SECRET
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  if (!apiKey) {
+    throw new Error("GOOGLE_GENERATIVE_AI_API_KEY is not set")
+  }
 
-  console.log(`[lib/vertex] Proxying AI call to ${apiUrl} (length: ${prompt.length})`)
+  const model = "gemini-2.5-flash"
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
 
-  const response = await fetch(apiUrl, {
+  console.log(`[lib/vertex] Calling Gemini API directly (prompt length: ${prompt.length})`)
+
+  const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": secret ? `Bearer ${secret}` : "",
-    },
-    body: JSON.stringify({ prompt, maxTokens }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+      },
+    }),
   })
 
   if (!response.ok) {
     const errText = await response.text()
-    console.error(`[lib/vertex] Proxy error (${response.status}):`, errText)
-    throw new Error(`AI Proxy Error: ${response.status} - ${errText}`)
+    console.error(`[lib/vertex] Gemini API error (${response.status}):`, errText)
+    throw new Error(`Gemini API Error: ${response.status} - ${errText}`)
   }
 
   const data = await response.json()
-  return data.text
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+  if (!text) {
+    console.error("[lib/vertex] No text in Gemini response:", JSON.stringify(data))
+    throw new Error("Empty response from Gemini API")
+  }
+
+  return text
 }
